@@ -48,7 +48,7 @@ jobs:
       run: |
         echo "Listing artifact directory:"
         ls -R mlruns/0/${{ env.run_id }}/artifacts || echo "Artifacts not found!"
-
+        
     - name: Setup Docker Build Environment
       uses: docker/setup-buildx-action@v3
 
@@ -61,7 +61,7 @@ jobs:
     - name: Build Docker Image Using MLflow
       run: |
         mlflow models build-docker \
-        -m "mlruns/0/${{ env.run_id }}/artifacts" \
+        -m "mlruns/0/${{ env.run_id }}/artifacts/model" \
         -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}"
 
     - name: Push Docker Image
