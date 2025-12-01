@@ -47,10 +47,9 @@ jobs:
     - name: Get Model ID
       id: get_model_id
       run: |
-        MODEL_ID=$(ls -d mlruns/0/${{ env.run_id }}/models/* | head -1)
+        MODEL_ID=$(ls mlruns/0/${{ env.run_id }}/models | head -1)
         echo "model_id=$MODEL_ID" >> $GITHUB_ENV
         echo "Model ID: $MODEL_ID"
-
 
     # ===========================
     # UPLOAD ARTIFACT MODEL
