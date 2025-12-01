@@ -74,7 +74,7 @@ jobs:
     - name: Build Docker Image from MLflow Model
       run: |
         mlflow models build-docker \
-          -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
+          -m "MLProject/mlruns/974206593476054612/${{ env.run_id }}/artifacts/model" \
           -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}"
 
     - name: Push Docker Image

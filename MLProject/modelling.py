@@ -1,19 +1,22 @@
-import argparse
 import pandas as pd
 import mlflow
 import mlflow.sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score
-)
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import os
 
+def main():
 
-def main(data_path):
-    # Load dataset based on parameter from MLflow
+    # Path dataset (sesuaikan dengan file di MLProject folder)
+    data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
+
+    # Set Mlflow Tracking URI (Opsional kalau running di local)
+    # HAPUS jika kamu pakai MLflow default (mlruns lokal), agar cocok dengan GitHub Actions
+
+    mlflow.set_experiment("Obesity-Classification")
+
+    # Load dataset
     df = pd.read_csv(data_path)
 
     X = df.drop(df.columns[-1], axis=1)
@@ -39,21 +42,17 @@ def main(data_path):
         print("Recall:", rec)
         print("F1 Score:", f1)
 
-        # Logging metrics manual
+        # Manual logging
         mlflow.log_metric("accuracy_manual", acc)
         mlflow.log_metric("precision_manual", prec)
         mlflow.log_metric("recall_manual", rec)
         mlflow.log_metric("f1_manual", f1)
 
-        # Logging model
+        # Save model
         mlflow.sklearn.log_model(model, artifact_path="model")
 
     print("🎯 Training + Model Logging sukses tersimpan di MLflow!")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, required=True)
-    args = parser.parse_args()
-
-    main(args.data_path)
+    main()

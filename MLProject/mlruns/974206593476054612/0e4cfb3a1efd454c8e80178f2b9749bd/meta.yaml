@@ -1,0 +1,15 @@
+artifact_uri: file:///D:/Submission_Dicoding/Workflow-CI/MLProject/mlruns/974206593476054612/0e4cfb3a1efd454c8e80178f2b9749bd/artifacts
+end_time: 1764590739460
+entry_point_name: ''
+experiment_id: '974206593476054612'
+lifecycle_stage: active
+run_id: 0e4cfb3a1efd454c8e80178f2b9749bd
+run_name: RandomForest-Autolog-Manuallog
+run_uuid: 0e4cfb3a1efd454c8e80178f2b9749bd
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1764590733726
+status: 3
+tags: []
+user_id: iibso
