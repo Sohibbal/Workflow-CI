@@ -24,24 +24,10 @@ jobs:
         pip install mlflow[extras]
         pip install scikit-learn pandas numpy
 
-    # ===========================
-    # TRAINING MLflow PROJECT
-    # ===========================
     - name: Run MLflow Project (Training)
       run: |
         mlflow run MLProject --env-manager=local
 
-    # ===========================
-    # GET RUN_ID
-    # ===========================
-    - name: Get Latest run_id
-      id: get_run_id
-      run: |
-        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
-        echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "Run ID: $RUN_ID"
-
-    # GET MODEL_ID
     - name: Get Model ID
       id: get_model_id
       run: |
@@ -49,16 +35,12 @@ jobs:
         echo "model_id=$MODEL_ID" >> $GITHUB_ENV
         echo "Model ID: $MODEL_ID"
 
-    # UPLOAD ARTIFACT MODEL
     - name: Upload Model Artifact
       uses: actions/upload-artifact@v4
       with:
         name: trained-ml-model
         path: mlruns/0/models/${{ env.model_id }}/artifacts
 
-    # ===========================
-    # DOCKER SETUP
-    # ===========================
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -68,19 +50,17 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-    # ===========================
-    # BUILD DOCKER IMAGE FROM MODEL
-    # ===========================
-    - name: Build Docker Image from MLflow Model
+    # 🔥 Build langsung dengan tag latest
+    - name: Build Docker Image as latest
       run: |
         mlflow models build-docker \
           -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
-          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:${{ env.run_id }}"
+          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
 
-    - name: Push Docker Image
+    # 🔥 Push latest only
+    - name: Push Docker Image latest
       run: |
-        docker push \
-          ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:${{ env.run_id }}
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
 
     - name: Completed
       run: echo "🎯 Pipeline complete!"
