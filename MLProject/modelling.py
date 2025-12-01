@@ -15,9 +15,6 @@ import matplotlib.pyplot as plt
 
 def main():
 
-    # Set tracking URI ke folder MLProject/mlruns
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
-
     # Path dataset
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
 
