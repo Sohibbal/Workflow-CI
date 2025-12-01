@@ -25,30 +25,11 @@ jobs:
         pip install scikit-learn pandas numpy matplotlib
 
     # ===========================
-    # SET MLflow Tracking ke workspace
-    # ===========================
-    - name: Configure MLflow Tracking URI
-      run: |
-        echo "MLFLOW_TRACKING_URI=file://${GITHUB_WORKSPACE}/mlruns" >> $GITHUB_ENV
-
-    # ===========================
     # TRAINING MLflow PROJECT
     # ===========================
     - name: Run MLflow Project (Training)
-      env:
-        MLFLOW_TRACKING_URI: ${{ env.MLFLOW_TRACKING_URI }}
       run: |
         mlflow run MLProject --env-manager=local
-
-    # ===========================
-    # Ambil RUN_ID terakhir
-    # ===========================
-    - name: Get Latest run_id
-      id: get_run_id
-      run: |
-        RUN_ID=$(ls -td mlruns/0/* | head -1 | xargs basename)
-        echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "Run ID: $RUN_ID"
 
     # ===========================
     # Debug Struktur Folder MLruns
@@ -57,6 +38,24 @@ jobs:
       run: |
         echo "📂 Struktur mlruns:"
         ls -R mlruns
+
+    # ===========================
+    # Ambil RUN_ID terakhir
+    # ===========================
+    - name: Get latest MLflow run_id
+      id: get_run_id 
+      run: |
+        # Cari RUN_ID terakhir di dalam folder mlruns
+        RUN_ID=$(ls -td MLProject/mlruns/0/*/ | head -n 1 | cut -d'/' -f4)
+        echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+        echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+        echo "Latest run_id: $RUN_ID"
+
+    - name: 6. Upload Artifacts (Model)
+      uses: actions/upload-artifact@v4
+      with:
+        name: ml-model-artifacts
+        path: MLProject/mlruns 
 
     # ===========================
     # UPLOAD ARTIFACT MODEL dari RUN
@@ -82,15 +81,27 @@ jobs:
     # ===========================
     # Build Docker Image dari model RUN
     # ===========================
-    - name: Build Docker Image from MLflow Model
+    #  5. Build & Push Docker
+    - name: 8. Build Docker Image with MLflow
       run: |
+        # Ambil RUN_ID dari langkah 5
+        RUN_ID=${{ steps.get_run_id.outputs.run_id }}
+        
+        # Beritahu MLflow di mana harus mencari 'mlruns'
+        export MLFLOW_TRACKING_URI=MLProject/mlruns
+        
+        echo "Membangun Docker image untuk RUN_ID: $RUN_ID dari $MLFLOW_TRACKING_URI"
+        
+        # Sekarang sintaks 'runs:/' akan berfungsi
         mlflow models build-docker \
-          -m "mlruns/0/${{ env.run_id }}/artifacts/model" \
-          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
+          --model-uri "MLProject/mlruns/0/$RUN_ID/artifacts/model" \
+          --name "sohibbal/model-obesity-ci" \
+          --env-manager=local
 
-    - name: Push Docker Image
+    - name: Push and Tag Docker Image
       run: |
-        docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
+        docker tag "sohibbal/model-obesity-ci" "${{ secrets.DOCKERHUB_USERNAME }}/model-obesity-ci:latest"
+
 
     - name: Completed
       run: echo "🎯 Pipeline complete!"
