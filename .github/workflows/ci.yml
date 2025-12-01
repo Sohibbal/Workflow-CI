@@ -34,7 +34,7 @@ jobs:
     - name: Get Latest run_id
       id: get_run_id
       run: |
-        RUN_ID=$(ls -1 mlruns/0 | tail -1)
+        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
         echo "Run ID detected: $RUN_ID"
 
@@ -43,6 +43,11 @@ jobs:
       with:
         name: trained-ml-model
         path: mlruns/
+
+    - name: Debug Model Folder
+      run: |
+        echo "Listing artifact directory:"
+        ls -R mlruns/0/${{ env.run_id }}/artifacts || echo "Artifacts not found!"
 
     - name: Setup Docker Build Environment
       uses: docker/setup-buildx-action@v3
