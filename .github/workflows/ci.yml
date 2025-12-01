@@ -18,6 +18,9 @@ jobs:
       with:
         python-version: '3.12.7'
 
+    - name: Check Env
+      run: python --version
+
     - name: Install Python Dependencies
       run: |
         pip install --upgrade pip
@@ -26,26 +29,16 @@ jobs:
 
     - name: Run MLflow Project (Training)
       run: |
-        mlflow run MLProject
+        mlflow run MLProject --env-manager=local
 
-    - name: Show mlruns structure (debug)
-      run: ls -R mlruns
-
-    - name: Get Latest RUN_ID using MLflow API
+    - name: Get Latest run_id
       id: get_run_id
       run: |
-        RUN_ID=$(mlflow runs list --experiment-id 0 --order-by attribute.start_time --max-results 1 | awk 'NR==2 {print $1}')
+        RUN_ID=$(ls -1 mlruns/0 | tail -1)
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "Detected RUN_ID: $RUN_ID"
+        echo "Run ID detected: $RUN_ID"
 
-    - name: Detect correct MLmodel folder
-      id: detect_model_path
-      run: |
-        MODEL_PATH=$(find mlruns/0/${{ env.run_id }}/artifacts -type f -name MLmodel -printf '%h\n' | head -1)
-        echo "model_path=$MODEL_PATH" >> $GITHUB_ENV
-        echo "Using model path: $MODEL_PATH"
-
-    - name: Upload MLflow Artifact to GitHub (mlruns folder)
+    - name: Upload Model Artifact to GitHub
       uses: actions/upload-artifact@v4
       with:
         name: trained-ml-model
@@ -63,13 +56,13 @@ jobs:
     - name: Build Docker Image Using MLflow
       run: |
         mlflow models build-docker \
-          -m "${{ env.model_path }}" \
-          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}"
+        -m "mlruns/0/${{ env.run_id }}/artifacts/model" \
+        -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}"
 
     - name: Push Docker Image
       run: |
         docker push \
-          ${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}
+        ${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}
 
     - name: Complete Job
       run: echo "🎯 Pipeline Selesai Sukses!"
