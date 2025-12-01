@@ -2,4 +2,4 @@ name: obesity-classification
 
 entry_points:
   main:
-    command: "python modelling.py --data_path {data_path}"
+    command: "python modelling.py"
