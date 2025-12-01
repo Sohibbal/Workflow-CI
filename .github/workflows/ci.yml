@@ -61,18 +61,6 @@ jobs:
         path: mlruns/0/${{ env.run_id }}/models/${{ env.model_id }}
 
     # ===========================
-    # DEBUGGING
-    # ===========================
-    - name: Debug Folder
-      run: |
-        echo "== Root Folder =="
-        ls -R .
-        echo "== Run Folder =="
-        ls -R mlruns/0/${{ env.run_id }}
-        echo "== Model Folder =="
-        ls -R mlruns/0/${{ env.run_id }}/models/${{ env.model_id }}
-
-    # ===========================
     # DOCKER SETUP
     # ===========================
     - name: Setup Docker Buildx
