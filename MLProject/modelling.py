@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import mlflow
 import mlflow.sklearn
@@ -9,11 +10,11 @@ from sklearn.metrics import (
     recall_score,
     f1_score
 )
-import os
 
-def main():
-    csv_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
-    df = pd.read_csv(csv_path)
+
+def main(data_path):
+    # Load dataset based on parameter from MLflow
+    df = pd.read_csv(data_path)
 
     X = df.drop(df.columns[-1], axis=1)
     y = df[df.columns[-1]]
@@ -38,15 +39,21 @@ def main():
         print("Recall:", rec)
         print("F1 Score:", f1)
 
+        # Logging metrics manual
         mlflow.log_metric("accuracy_manual", acc)
         mlflow.log_metric("precision_manual", prec)
         mlflow.log_metric("recall_manual", rec)
         mlflow.log_metric("f1_manual", f1)
 
-        # ⬇⬇ Tambahan penting agar artifact model pasti ada
-        mlflow.sklearn.log_model(model, "model")
+        # Logging model
+        mlflow.sklearn.log_model(model, artifact_path="model")
 
-    print("Training + Manual Metrics sudah dicatat ke MLflow!")
+    print("🎯 Training + Model Logging sukses tersimpan di MLflow!")
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", type=str, required=True)
+    args = parser.parse_args()
+
+    main(args.data_path)
