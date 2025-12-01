@@ -49,6 +49,11 @@ jobs:
         echo "Listing artifact directory:"
         ls -R mlruns/0/${{ env.run_id }}/artifacts || echo "Artifacts not found!"
 
+    - name: Debug mlruns path
+      run: |
+        echo "Searching all mlruns folders..."
+        find . -name "mlruns" -type d
+
     - name: Setup Docker Build Environment
       uses: docker/setup-buildx-action@v3
 
