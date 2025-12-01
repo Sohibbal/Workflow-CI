@@ -34,7 +34,7 @@ jobs:
     - name: Get Latest run_id
       id: get_run_id
       run: |
-        RUN_ID=$(ls -td MLProject/mlruns/0/*/ | head -1 | xargs basename)
+        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
         echo "Run ID detected: $RUN_ID"
 
@@ -43,6 +43,14 @@ jobs:
       with:
         name: trained-ml-model
         path: mlruns/
+
+    - name: Debug Repo Structure
+      run: |
+        echo "Listing project folder:"
+        ls -R .
+
+        echo "Listing MLProject folder:"
+        ls -R MLProject
 
     - name: Debug Model Folder
       run: |
@@ -66,7 +74,7 @@ jobs:
     - name: Build Docker Image Using MLflow
       run: |
         mlflow models build-docker \
-        -m "MLProject/mlruns/0/${{ env.run_id }}/artifacts/model" \
+        -m "/mlruns/0/${{ env.run_id }}/artifacts/model" \
         -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}"
 
     - name: Push Docker Image
