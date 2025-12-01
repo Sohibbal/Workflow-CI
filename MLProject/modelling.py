@@ -8,8 +8,6 @@ import os
 
 def main():
 
-    mlflow.set_tracking_uri("file:MLProject/mlruns")
-    
     # Path dataset (sesuaikan dengan file di MLProject folder)
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
 
