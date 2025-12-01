@@ -12,9 +12,6 @@ from sklearn.metrics import (
 import os
 
 def main():
-    mlflow.set_tracking_uri("file:./mlruns")
-    mlflow.sklearn.autolog(log_models=True)
-
     csv_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
     df = pd.read_csv(csv_path)
 

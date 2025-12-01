@@ -34,7 +34,7 @@ jobs:
     - name: Get Latest run_id
       id: get_run_id
       run: |
-        RUN_ID=$(mlflow runs list --experiment-id 0 --max-results 1 | awk 'NR==2{print $1}')
+        RUN_ID=$(ls -1 mlruns/0 | tail -1)
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
         echo "Run ID detected: $RUN_ID"
 
@@ -44,13 +44,6 @@ jobs:
         name: trained-ml-model
         path: mlruns/
 
-    - name: Debug MLruns
-      run: |
-        echo "=== List MLflow Runs ==="
-        mlflow runs list --experiment-id 0
-        echo "=== Directory Structure ==="
-        ls -R mlruns
-        
     - name: Setup Docker Build Environment
       uses: docker/setup-buildx-action@v3
 
