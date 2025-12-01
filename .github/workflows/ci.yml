@@ -31,34 +31,20 @@ jobs:
       run: |
         mlflow run MLProject --env-manager=local
 
-    # ===========================
-    # GET RUN_ID
-    # ===========================
-    - name: Get Latest run_id
-      id: get_run_id
-      run: |
-        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
-        echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "Run ID: $RUN_ID"
-
-    # ===========================
     # GET MODEL_ID
-    # ===========================
     - name: Get Model ID
       id: get_model_id
       run: |
-        MODEL_ID=$(ls mlruns/0/${{ env.run_id }}/models | head -1)
+        MODEL_ID=$(ls mlruns/0/models | head -1)
         echo "model_id=$MODEL_ID" >> $GITHUB_ENV
         echo "Model ID: $MODEL_ID"
 
-    # ===========================
     # UPLOAD ARTIFACT MODEL
-    # ===========================
-    - name: Upload Model Artifact to GitHub
+    - name: Upload Model Artifact
       uses: actions/upload-artifact@v4
       with:
         name: trained-ml-model
-        path: mlruns/0/${{ env.run_id }}/models/${{ env.model_id }}
+        path: mlruns/0/models/${{ env.model_id }}/artifacts
 
     # ===========================
     # DOCKER SETUP
@@ -78,7 +64,7 @@ jobs:
     - name: Build Docker Image from MLflow Model
       run: |
         mlflow models build-docker \
-          -m "mlruns/0/${{ env.run_id }}/models/${{ env.model_id }}" \
+          -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
           -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}"
 
     - name: Push Docker Image
