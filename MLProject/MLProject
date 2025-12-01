@@ -4,6 +4,4 @@ conda_env: conda.yaml
 
 entry_points:
   main:
-    parameters:
-      run_id: {type: string, default: ""}
     command: "python modelling.py"
