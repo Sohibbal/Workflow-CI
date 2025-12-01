@@ -26,7 +26,7 @@ jobs:
 
     - name: Run MLflow Project (Training)
       run: |
-        mlflow run . -e main --env-manager=local
+        mlflow run MLProject
 
     - name: Show mlruns structure (debug)
       run: ls -R mlruns
