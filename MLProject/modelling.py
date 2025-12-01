@@ -11,11 +11,6 @@ def main():
     # Path dataset (sesuaikan dengan file di MLProject folder)
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
 
-    # Set Mlflow Tracking URI (Opsional kalau running di local)
-    # HAPUS jika kamu pakai MLflow default (mlruns lokal), agar cocok dengan GitHub Actions
-
-    mlflow.set_experiment("Obesity-Classification")
-
     # Load dataset
     df = pd.read_csv(data_path)
 
