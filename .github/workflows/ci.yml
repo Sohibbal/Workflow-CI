@@ -16,9 +16,9 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12.7'
+        python-version: '3.12'
 
-    - name: Check Env
+    - name: Check Python Version
       run: python --version
 
     - name: Install Python Dependencies
@@ -29,26 +29,26 @@ jobs:
 
     - name: Run MLflow Project (Training)
       run: |
-        mlflow run MLProject --env-manager=local
+        mlflow run . --env-manager=local
 
     - name: Get Latest run_id
       id: get_run_id
       run: |
         RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
-        echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "Run ID detected: $RUN_ID"
+        echo "run_id=$RUN_ID"
+        echo "::set-output name=run_id::$RUN_ID"
 
-    - name: Upload Model Artifact to GitHub
+    - name: Upload Artifact (All mlruns)
       uses: actions/upload-artifact@v4
       with:
-        name: trained-ml-model
+        name: mlflow-mlruns
         path: mlruns/
 
-    - name: Debug Model Folder
+    - name: Debug Artifact Structure
       run: |
-        echo "Listing artifact directory:"
-        ls -R mlruns/0/${{ env.run_id }}/artifacts || echo "Artifacts not found!"
-        
+        echo "Checking artifacts..."
+        ls -R mlruns/0/${{ steps.get_run_id.outputs.run_id }}/artifacts || echo "Artifacts not found!"
+
     - name: Setup Docker Build Environment
       uses: docker/setup-buildx-action@v3
 
@@ -61,13 +61,13 @@ jobs:
     - name: Build Docker Image Using MLflow
       run: |
         mlflow models build-docker \
-        -m "mlruns/0/${{ env.run_id }}/artifacts/model" \
-        -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}"
+        -m "mlruns/0/${{ steps.get_run_id.outputs.run_id }}/artifacts/model" \
+        -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ steps.get_run_id.outputs.run_id }}"
 
     - name: Push Docker Image
       run: |
         docker push \
-        ${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ env.run_id }}
+        ${{ secrets.DOCKERHUB_USERNAME }}/obesity-model:${{ steps.get_run_id.outputs.run_id }}
 
     - name: Complete Job
       run: echo "🎯 Pipeline Selesai Sukses!"
