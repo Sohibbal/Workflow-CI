@@ -9,6 +9,11 @@ jobs:
   mlops:
     runs-on: ubuntu-latest
 
+    env:
+      # === IMPORTANT ===
+      # Paksa MLflow menyimpan semua run ke folder MLProject/mlruns
+      MLFLOW_TRACKING_URI: file:MLProject/mlruns
+
     steps:
     - name: Checkout Repo
       uses: actions/checkout@v3
@@ -37,24 +42,18 @@ jobs:
     - name: Get Latest run_id
       id: get_run_id
       run: |
-        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
+        RUN_ID=$(ls -td MLProject/mlruns/0/*/ | head -1 | xargs basename)
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
         echo "Run ID: $RUN_ID"
 
-    # GET MODEL_ID
-    - name: Get Model ID
-      id: get_model_id
-      run: |
-        MODEL_ID=$(ls mlruns/0/models | head -1)
-        echo "model_id=$MODEL_ID" >> $GITHUB_ENV
-        echo "Model ID: $MODEL_ID"
-
+    # ===========================
     # UPLOAD ARTIFACT MODEL
+    # ===========================
     - name: Upload Model Artifact
       uses: actions/upload-artifact@v4
       with:
         name: trained-ml-model
-        path: mlruns/0/models/${{ env.model_id }}/artifacts
+        path: MLProject/mlruns/0/${{ env.run_id }}/artifacts/model
 
     # ===========================
     # DOCKER SETUP
@@ -69,7 +68,7 @@ jobs:
         password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
     # ===========================
-    # BUILD DOCKER IMAGE FROM MODEL
+    # BUILD DOCKER IMAGE
     # ===========================
     - name: Build Docker Image from MLflow Model
       run: |
