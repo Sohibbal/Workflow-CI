@@ -25,6 +25,9 @@ jobs:
         pip install scikit-learn pandas numpy dagshub
         pip install matplotlib seaborn
 
+    - name: Install jq
+      run: sudo apt-get install -y jq
+
     # ===========================
     # TRAINING WITH MLflow PROJECT
     # ===========================
@@ -33,19 +36,19 @@ jobs:
         mlflow run MLProject --env-manager=local
 
     # ===========================
-    # 🔥 UPLOAD ARTIFACTS TO GITHUB ACTIONS
+    # UPLOAD ARTIFACTS TO GITHUB
     # ===========================
     - name: Upload Feature Importance Artifact
       uses: actions/upload-artifact@v4
       with:
         name: feature-importance
-        path: feature_importance.csv
+        path: MLProject/feature_importance.csv
 
     - name: Upload Confusion Matrix Artifact
       uses: actions/upload-artifact@v4
       with:
         name: confusion-matrix
-        path: confusion_matrix.png
+        path: MLProject/confusion_matrix.png
 
     # ===========================
     # GET LATEST RUN ID FROM DAGSHUB
@@ -88,7 +91,7 @@ jobs:
         password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
     # ===========================
-    # BUILD DOCKER IMAGE FROM MODEL
+    # BUILD DOCKER IMAGE
     # ===========================
     - name: Build Docker Image from MLflow Model
       run: |
