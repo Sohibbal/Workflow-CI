@@ -15,19 +15,8 @@ import os
 
 
 def main():
-    # ============================================================
-    # 🔥 FIX: Setup Token untuk CI (menghindari OAuth)
-    # ============================================================
-    dagshub.auth.add_app_token(
-        username=os.getenv("DAGSHUB_USERNAME"),
-        token=os.getenv("DAGSHUB_TOKEN")
-    )
-
-    dagshub.init(
-        repo_owner=os.getenv("DAGSHUB_USERNAME"),
-        repo_name='obesity-classification',
-        mlflow=True
-    )
+    
+    mlflow.set_tracking_uri("https://dagshub.com/Sohibbal/obesity-classification.mlflow")
 
     # ============================================================
     # LOAD DATA
