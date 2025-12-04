@@ -21,7 +21,7 @@ jobs:
     - name: Install Dependencies
       run: |
         pip install --upgrade pip
-        pip install mlflow[extras]
+        pip install mlflow==2.8.1
         pip install scikit-learn pandas numpy dagshub
         pip install matplotlib seaborn
 
