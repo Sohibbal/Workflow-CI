@@ -2,7 +2,6 @@ import pandas as pd
 import mlflow
 import mlflow.sklearn
 import numpy as np
-import dagshub
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
@@ -13,14 +12,9 @@ from sklearn.preprocessing import label_binarize
 import matplotlib.pyplot as plt
 import os
 
-
 def main():
-    
-    mlflow.set_tracking_uri("https://dagshub.com/Sohibbal/obesity-classification.mlflow")
 
-    # ============================================================
-    # LOAD DATA
-    # ============================================================
+    # Load dataset
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
     df = pd.read_csv(data_path)
 
@@ -31,11 +25,9 @@ def main():
         X, y, test_size=0.2, random_state=42
     )
 
-    # ============================================================
-    # START MLflow RUN
-    # ============================================================
-    with mlflow.start_run(run_name="RandomForest-ManualLogging-DagsHub"):
+    with mlflow.start_run(run_name="RandomForest-ManualLogging"):
 
+        # Hyperparameter tuning menggunakan gridsearch
         params = {
             "n_estimators": [50, 100, 150],
             "max_depth": [3, 5, 10, None]
@@ -47,19 +39,16 @@ def main():
 
         best_model = grid.best_estimator_
 
-        # Prediction
+        # Prediction hasil training + testing
         preds_train = best_model.predict(X_train)
         probs_train = best_model.predict_proba(X_train)
         preds_test = best_model.predict(X_test)
-        probs_test = best_model.predict_proba(X_test)
 
         classes = list(set(y))
         y_train_bin = label_binarize(y_train, classes=classes)
         y_test_bin = label_binarize(y_test, classes=classes)
 
-        # ============================================================
         # TRAINING METRICS
-        # ============================================================
         mlflow.log_metric("training_accuracy_score", accuracy_score(y_train, preds_train))
         mlflow.log_metric("training_f1_score", f1_score(y_train, preds_train, average='weighted'))
         mlflow.log_metric("training_precision_score", precision_score(y_train, preds_train, average='weighted'))
@@ -68,23 +57,17 @@ def main():
         mlflow.log_metric("training_roc_auc", roc_auc_score(y_train_bin, probs_train, multi_class='ovr'))
         mlflow.log_metric("training_score", best_model.score(X_train, y_train))
 
-        # ============================================================
-        # TESTING METRICS
-        # ============================================================
+        # TESTING METRICS (Tambahan)
         mlflow.log_metric("testing_accuracy", accuracy_score(y_test, preds_test))
         mlflow.log_metric("testing_f1", f1_score(y_test, preds_test, average='weighted'))
-        mlflow.log_metric("testing_precision", precision_score(y_test, preds_test, average='weighted'))
+        mlflow.log_metric("test_precision", precision_score(y_test, preds_test, average='weighted'))
         mlflow.log_metric("testing_recall", recall_score(y_test, preds_test, average='weighted'))
 
-        # ============================================================
-        # HYPERPARAMETER LOGGING
-        # ============================================================
+        # Parameter terbaik
         for key, value in grid.best_params_.items():
             mlflow.log_param(key, value)
 
-        # ============================================================
-        # ARTEFAK 1: Feature Importance
-        # ============================================================
+        # Artefak 1: Feature Importance
         fi = pd.DataFrame({
             "feature": X.columns,
             "importance": best_model.feature_importances_
@@ -93,20 +76,16 @@ def main():
         fi.to_csv(fi_path, index=False)
         mlflow.log_artifact(fi_path)
 
-        # ============================================================
-        # ARTEFAK 2: Confusion Matrix
-        # ============================================================
+        # Artefak 2: Confusion Matrix dengan angka di kotak
         cm = confusion_matrix(y_test, preds_test)
         plt.figure(figsize=(8, 6))
         plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
         plt.title("Confusion Matrix")
         plt.colorbar()
 
-        # tambah angka di kotak
         for i in range(cm.shape[0]):
             for j in range(cm.shape[1]):
-                plt.text(j, i, cm[i, j], ha='center', va='center',
-                         color='white' if cm[i, j] > cm.max() / 2 else 'black')
+                plt.text(j, i, cm[i, j], ha='center', va='center', color='white' if cm[i, j] > cm.max()/2 else 'black')
 
         plt.xlabel("Predicted Label")
         plt.ylabel("True Label")
@@ -116,13 +95,10 @@ def main():
         plt.close()
         mlflow.log_artifact(cm_path)
 
-        # ============================================================
-        # LOG MODEL
-        # ============================================================
+        # Log Model
         mlflow.sklearn.log_model(best_model, "model")
 
     print("Model dan metric berhasil disimpan di DagsHub!")
-
 
 if __name__ == "__main__":
     main()
