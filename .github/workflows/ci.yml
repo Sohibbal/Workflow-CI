@@ -22,42 +22,61 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install mlflow[extras]
-        pip install scikit-learn pandas numpy
+        pip install scikit-learn pandas numpy dagshub
+        pip install matplotlib seaborn
 
     # ===========================
-    # TRAINING MLflow PROJECT
+    # TRAINING WITH MLflow PROJECT
     # ===========================
     - name: Run MLflow Project (Training)
       run: |
-        mlflow run MLProject --env-manager=local
+        mlflow run . --env-manager=local
 
     # ===========================
-    # GET RUN_ID
+    # 🔥 UPLOAD ARTIFACTS TO GITHUB ACTIONS
     # ===========================
-    - name: Get Latest run_id
-      id: get_run_id
-      run: |
-        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
-        echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "Run ID: $RUN_ID"
-
-    # GET MODEL_ID
-    - name: Get Model ID
-      id: get_model_id
-      run: |
-        MODEL_ID=$(ls mlruns/0/models | head -1)
-        echo "model_id=$MODEL_ID" >> $GITHUB_ENV
-        echo "Model ID: $MODEL_ID"
-
-    # UPLOAD ARTIFACT MODEL
-    - name: Upload Model Artifact
+    - name: Upload Feature Importance Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: trained-ml-model
-        path: mlruns/0/models/${{ env.model_id }}/artifacts
+        name: feature-importance
+        path: feature_importance.csv
+
+    - name: Upload Confusion Matrix Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: confusion-matrix
+        path: confusion_matrix.png
 
     # ===========================
-    # DOCKER SETUP
+    # GET LATEST RUN ID FROM DAGSHUB
+    # ===========================
+    - name: Get Latest Run from DagsHub
+      id: get_run
+      run: |
+        echo "Fetching latest MLflow run from DagsHub..."
+
+        RESPONSE=$(curl -s -u "${{ secrets.DAGSHUB_USERNAME }}:${{ secrets.DAGSHUB_TOKEN }}" \
+          "https://dagshub.com/api/v1/repos/Sohibbal/obesity-classification/mlflow/runs/search")
+
+        RUN_ID=$(echo "$RESPONSE" | jq -r '.runs[0].run_id')
+
+        echo "Run ID: $RUN_ID"
+        echo "run_id=$RUN_ID" >> $GITHUB_ENV
+
+    # ===========================
+    # DOWNLOAD MODEL ARTIFACT FROM DAGSHUB
+    # ===========================
+    - name: Download Model Artifact
+      run: |
+        mkdir -p model_artifact
+        curl -L -u "${{ secrets.DAGSHUB_USERNAME }}:${{ secrets.DAGSHUB_TOKEN }}" \
+          "https://dagshub.com/api/v1/repos/Sohibbal/obesity-classification/mlflow/artifacts/${{ env.run_id }}/model" \
+          --output model.zip
+        
+        unzip model.zip -d model_artifact
+
+    # ===========================
+    # DOCKER AUTH + BUILDX
     # ===========================
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -74,7 +93,7 @@ jobs:
     - name: Build Docker Image from MLflow Model
       run: |
         mlflow models build-docker \
-          -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
+          -m "model_artifact/model" \
           -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
 
     - name: Push Docker Image
@@ -82,4 +101,4 @@ jobs:
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
 
     - name: Completed
-      run: echo "🎯 Pipeline complete!"
+      run: echo "🎯 Pipeline complete from DagsHub → Docker!"
