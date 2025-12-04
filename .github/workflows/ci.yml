@@ -11,7 +11,7 @@ jobs:
 
     steps:
     - name: Checkout Repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -30,7 +30,7 @@ jobs:
     # ===========================
     - name: Run MLflow Project (Training)
       run: |
-        mlflow run . --env-manager=local
+        mlflow run MLProject --env-manager=local
 
     # ===========================
     # 🔥 UPLOAD ARTIFACTS TO GITHUB ACTIONS
