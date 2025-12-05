@@ -2,7 +2,6 @@ import pandas as pd
 import mlflow
 import mlflow.sklearn
 import numpy as np
-# import dagshub
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
@@ -12,13 +11,6 @@ from sklearn.metrics import (
 from sklearn.preprocessing import label_binarize
 import matplotlib.pyplot as plt
 import os
-
-# Inisialisasi DagsHub (untuk serving online kreteria 2 Advancde)
-# dagshub.init(repo_owner='Sohibbal', repo_name='obesity-classification', mlflow=True)
-
-# Inisialisasi MLFlow Tracking URI (untuk serving online kreteria 2 Skilled)
-# mlflow.set_tracking_uri("http://127.0.0.1:5000")
-# mlflow.set_experiment("Obesity-Classification")
 
 def main():
 
