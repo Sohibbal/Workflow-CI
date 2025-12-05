@@ -18,18 +18,17 @@ jobs:
       with:
         python-version: '3.12.7'
 
-    - name: Install Dependencies
+    - name: Install MLflow Dependencies
       run: |
         pip install --upgrade pip
         pip install mlflow[extras]
-        pip install scikit-learn pandas numpy
 
     # ===========================
-    # TRAINING MLflow PROJECT
+    # RUN MLflow PROJECT with conda.yaml
     # ===========================
     - name: Run MLflow Project (Training)
       run: |
-        mlflow run MLProject --env-manager=local
+        mlflow run MLProject --env-manager=conda
 
     # ===========================
     # GET RUN_ID
@@ -41,20 +40,14 @@ jobs:
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
         echo "Run ID: $RUN_ID"
 
-    # GET MODEL_ID
-    - name: Get Model ID
-      id: get_model_id
-      run: |
-        MODEL_ID=$(ls mlruns/0/models | head -1)
-        echo "model_id=$MODEL_ID" >> $GITHUB_ENV
-        echo "Model ID: $MODEL_ID"
-
-    # UPLOAD ARTIFACT MODEL
+    # ===========================
+    # UPLOAD MODEL ARTIFACT
+    # ===========================
     - name: Upload Model Artifact
       uses: actions/upload-artifact@v4
       with:
         name: trained-ml-model
-        path: mlruns/0/models/${{ env.model_id }}/artifacts
+        path: mlruns/0/${{ env.run_id }}/artifacts/model
 
     # ===========================
     # DOCKER SETUP
@@ -74,9 +67,12 @@ jobs:
     - name: Build Docker Image from MLflow Model
       run: |
         mlflow models build-docker \
-          -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
+          -m "mlruns/0/${{ env.run_id }}/artifacts/model" \
           -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
 
+    # ===========================
+    # PUSH IMAGE
+    # ===========================
     - name: Push Docker Image
       run: |
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
