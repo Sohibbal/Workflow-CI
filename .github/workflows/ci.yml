@@ -1,4 +1,4 @@
-name: Advanced MLOps Pipeline
+name: DagsHub MLOps Pipeline
 
 on:
   push:
@@ -6,80 +6,92 @@ on:
       - main
 
 jobs:
-  mlops:
+  train-and-build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repo
+    - name: Checkout Code
       uses: actions/checkout@v3
 
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12.7'
+        python-version: "3.12.7"
 
     - name: Install Dependencies
       run: |
         pip install --upgrade pip
-        pip install mlflow[extras]
+        pip install mlflow==2.19.0
         pip install scikit-learn pandas numpy dagshub
 
-    # ===========================
-    # TRAINING MLflow PROJECT
-    # ===========================
-    - name: Run MLflow Project (Training)
+    # ================================
+    # RUN MLProject → modelling.py
+    # ================================
+    - name: Run MLflow Project
+      env:
+        DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
       run: |
         mlflow run MLProject --env-manager=local
 
-    # ===========================
-    # GET RUN_ID
-    # ===========================
-    - name: Get Latest run_id
-      id: get_run_id
+    # ===================================
+    # GET LATEST RUN ID FROM DAGSHUB
+    # ===================================
+    - name: Get Latest Run ID
+      id: get_run
+      env:
+        DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+        DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
       run: |
-        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
+        RUN_JSON=$(curl -s -u "${DAGSHUB_USERNAME}:${DAGSHUB_TOKEN}" \
+          "https://dagshub.com/api/v1/repos/${DAGSHUB_USERNAME}/obesity-classification/mlflow/runs/search")
+
+        RUN_ID=$(echo "$RUN_JSON" | python3 - <<EOF
+        import sys, json data = json.load(sys.stdin) print(data["runs"][0]["info"]["run_id"]) EOF)
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "Run ID: $RUN_ID"
+        echo "Latest RUN ID: $RUN_ID"
 
-    # GET MODEL_ID
-    - name: Get Model ID
-      id: get_model_id
+    # ===================================
+    # DOWNLOAD MODEL ARTIFACT
+    # ===================================
+    - name: Download Model from DagsHub MLflow
+      env:
+        DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+        DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
       run: |
-        MODEL_ID=$(ls mlruns/0/models | head -1)
-        echo "model_id=$MODEL_ID" >> $GITHUB_ENV
-        echo "Model ID: $MODEL_ID"
+        mkdir -p model_artifacts
+        curl -L -o model.zip -u "${DAGSHUB_USERNAME}:${DAGSHUB_TOKEN}" \
+          "https://dagshub.com/${DAGSHUB_USERNAME}/obesity-classification/mlflow-artifacts/${run_id}/artifacts/model/model"
 
-    # UPLOAD ARTIFACT MODEL
+        unzip model.zip -d model_artifacts/
+
+    # Upload model ke GitHub Artifact
     - name: Upload Model Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: trained-ml-model
-        path: mlruns/0/models/${{ env.model_id }}/artifacts
+        name: trained-model
+        path: model_artifacts/
 
-    # ===========================
-    # DOCKER SETUP
-    # ===========================
+    # ===============================
+    # DOCKER BUILD & PUSH
+    # ===============================
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Login Docker Hub
+    - name: Docker Login
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-    # ===========================
-    # BUILD DOCKER IMAGE FROM MODEL
-    # ===========================
-    - name: Build Docker Image from MLflow Model
+    - name: Build MLFlow Docker Image
       run: |
         mlflow models build-docker \
-          -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
+          -m model_artifacts \
           -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
 
-    - name: Push Docker Image
+    - name: Push Image
       run: |
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
 
-    - name: Completed
-      run: echo "🎯 Pipeline complete!"
+    - name: Done
+      run: echo "🔥 Pipeline selesai!"
