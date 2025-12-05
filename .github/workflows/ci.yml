@@ -1,74 +1,52 @@
-name: Advanced MLOps Pipeline
+name: MLFlow CI/CD
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
 
 jobs:
   mlops:
     runs-on: ubuntu-latest
 
     steps:
-      # ===========================
-      # CHECKOUT
-      # ===========================
+      # Checkout repository
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # ===========================
-      # PYTHON ENV
-      # ===========================
+      # Setup Python
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
+      # Install dependencies
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
           pip install mlflow[extras]
           pip install scikit-learn pandas numpy matplotlib
 
-      # ===========================
-      # RUN MLFLOW PROJECT (PIP MODE)
-      # ===========================
-      - name: Run MLflow Project (Training)
+      # Run MLflow Project
+      - name: Run MLflow Project
         run: |
-          mlflow run MLProject --env-manager=local
+          mlflow run MLProject -e main --env-manager=local
 
-      # ===========================
-      # GET LATEST RUN ID
-      # ===========================
-      - name: Get Latest run_id
+      # Ambil run_id terbaru
+      - name: Get Latest Run ID
         id: get_run_id
         run: |
           RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
           echo "run_id=$RUN_ID" >> $GITHUB_ENV
-          echo "Run ID = $RUN_ID"
+          echo "Run ID: $RUN_ID"
 
-      # ===========================
-      # GET MODEL ID
-      # ===========================
-      - name: Get Model ID
-        id: get_model_id
-        run: |
-          MODEL_ID=$(ls mlruns/0/models)
-          echo "model_id=$MODEL_ID" >> $GITHUB_ENV
-          echo "Model ID = $MODEL_ID"
-
-      # ===========================
-      # UPLOAD MODEL ARTIFACT
-      # ===========================
+      # Upload model artifact
       - name: Upload Model Artifact
         uses: actions/upload-artifact@v4
         with:
           name: trained-ml-model
-          path: mlruns/0/models/${{ env.model_id }}/artifacts
+          path: mlruns/0/${{ env.run_id }}/artifacts/model
 
-      # ===========================
-      # DOCKER SETUP
-      # ===========================
+      # Docker setup
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -78,13 +56,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      # ===========================
-      # BUILD DOCKER IMAGE DARI MODEL
-      # ===========================
-      - name: Build Docker Image from MLflow Model
+      # Build Docker image dari MLflow model
+      - name: Build Docker Image
         run: |
           mlflow models build-docker \
-            -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
+            -m "mlruns/0/${{ env.run_id }}/artifacts/model" \
             -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
 
       - name: Push Docker Image
