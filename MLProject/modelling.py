@@ -14,7 +14,12 @@ import matplotlib.pyplot as plt
 import os
 
 # Inisialisasi DagsHub (untuk serving online kreteria 2 Advancde)
-dagshub.init(repo_owner='Sohibbal', repo_name='obesity-classification', mlflow=True)
+dagshub.init(
+    repo_owner="sohibbal",
+    repo_name="obesity-classification",
+    mlflow=True,
+    token=os.getenv("DAGSHUB_TOKEN")
+)
 
 # Inisialisasi MLFlow Tracking URI (untuk serving online kreteria 2 Skilled)
 # mlflow.set_tracking_uri("http://127.0.0.1:5000")
