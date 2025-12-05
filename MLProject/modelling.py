@@ -1,21 +1,24 @@
 import pandas as pd
 import mlflow
 import mlflow.sklearn
-import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
-    accuracy_score, f1_score, precision_score, recall_score,
-    log_loss, roc_auc_score, confusion_matrix
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix
 )
-from sklearn.preprocessing import label_binarize
-import matplotlib.pyplot as plt
 import os
+import matplotlib.pyplot as plt
 
 def main():
 
-    # Load dataset
+    # Path dataset
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
+
+    # Load dataset
     df = pd.read_csv(data_path)
 
     X = df.drop(df.columns[-1], axis=1)
@@ -25,67 +28,52 @@ def main():
         X, y, test_size=0.2, random_state=42
     )
 
-    with mlflow.start_run(run_name="RandomForest-ManualLogging"):
+    with mlflow.start_run(run_name="RandomForest-Autolog-Manuallog"):
+        # Train model
+        model = RandomForestClassifier(n_estimators=150, max_depth=None)
+        model.fit(X_train, y_train)
 
-        # Hyperparameter tuning menggunakan gridsearch
-        params = {
-            "n_estimators": [50, 100, 150],
-            "max_depth": [3, 5, 10, None]
-        }
+        preds = model.predict(X_test)
 
-        model = RandomForestClassifier()
-        grid = GridSearchCV(model, params, cv=3, scoring='accuracy')
-        grid.fit(X_train, y_train)
+        # Metrics
+        acc = accuracy_score(y_test, preds)
+        prec = precision_score(y_test, preds, average="weighted")
+        rec = recall_score(y_test, preds, average="weighted")
+        f1 = f1_score(y_test, preds, average="weighted")
 
-        best_model = grid.best_estimator_
+        print("Akurasi:", acc)
+        print("Precision:", prec)
+        print("Recall:", rec)
+        print("F1 Score:", f1)
 
-        # Prediction hasil training + testing
-        preds_train = best_model.predict(X_train)
-        probs_train = best_model.predict_proba(X_train)
-        preds_test = best_model.predict(X_test)
-
-        classes = list(set(y))
-        y_train_bin = label_binarize(y_train, classes=classes)
-        y_test_bin = label_binarize(y_test, classes=classes)
-
-        # TRAINING METRICS
-        mlflow.log_metric("training_accuracy_score", accuracy_score(y_train, preds_train))
-        mlflow.log_metric("training_f1_score", f1_score(y_train, preds_train, average='weighted'))
-        mlflow.log_metric("training_precision_score", precision_score(y_train, preds_train, average='weighted'))
-        mlflow.log_metric("training_recall_score", recall_score(y_train, preds_train, average='weighted'))
-        mlflow.log_metric("training_logloss", log_loss(y_train_bin, probs_train))
-        mlflow.log_metric("training_roc_auc", roc_auc_score(y_train_bin, probs_train, multi_class='ovr'))
-        mlflow.log_metric("training_score", best_model.score(X_train, y_train))
-
-        # TESTING METRICS (Tambahan)
-        mlflow.log_metric("testing_accuracy", accuracy_score(y_test, preds_test))
-        mlflow.log_metric("testing_f1", f1_score(y_test, preds_test, average='weighted'))
-        mlflow.log_metric("test_precision", precision_score(y_test, preds_test, average='weighted'))
-        mlflow.log_metric("testing_recall", recall_score(y_test, preds_test, average='weighted'))
-
-        # Parameter terbaik
-        for key, value in grid.best_params_.items():
-            mlflow.log_param(key, value)
+        # Manual logging metrics
+        mlflow.log_metric("accuracy_manual", acc)
+        mlflow.log_metric("precision_manual", prec)
+        mlflow.log_metric("recall_manual", rec)
+        mlflow.log_metric("f1_manual", f1)
 
         # Artefak 1: Feature Importance
         fi = pd.DataFrame({
             "feature": X.columns,
-            "importance": best_model.feature_importances_
+            "importance": model.feature_importances_
         }).sort_values(by="importance", ascending=False)
         fi_path = "feature_importance.csv"
         fi.to_csv(fi_path, index=False)
         mlflow.log_artifact(fi_path)
 
         # Artefak 2: Confusion Matrix dengan angka di kotak
-        cm = confusion_matrix(y_test, preds_test)
+        cm = confusion_matrix(y_test, preds)
         plt.figure(figsize=(8, 6))
         plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
         plt.title("Confusion Matrix")
         plt.colorbar()
 
+        # Tambahkan angka di dalam tiap kotak
         for i in range(cm.shape[0]):
             for j in range(cm.shape[1]):
-                plt.text(j, i, cm[i, j], ha='center', va='center', color='white' if cm[i, j] > cm.max()/2 else 'black')
+                plt.text(j, i, cm[i, j],
+                         ha='center', va='center',
+                         color='white' if cm[i, j] > cm.max()/2 else 'black')
 
         plt.xlabel("Predicted Label")
         plt.ylabel("True Label")
@@ -95,11 +83,10 @@ def main():
         plt.close()
         mlflow.log_artifact(cm_path)
 
-        # Log Model
-        mlflow.sklearn.log_model(best_model, "model")
+        # Save model
+        mlflow.sklearn.log_model(model, artifact_path="model")
 
-    print("Model dan metric berhasil disimpan di DagsHub!")
+    print("Training + Model + Artifacts sukses tersimpan di MLflow!")
 
 if __name__ == "__main__":
     main()
-    
