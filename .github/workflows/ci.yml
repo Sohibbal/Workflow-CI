@@ -26,10 +26,13 @@ jobs:
           pip install mlflow[extras]
           pip install scikit-learn pandas numpy matplotlib
 
+      # Clean old mlruns (opsional tapi aman)
+      - name: Clean old mlruns
+        run: rm -rf mlruns || true
+
       # Run MLflow Project
       - name: Run MLflow Project
-        run: |
-          mlflow run MLProject -e main --env-manager=local
+        run: mlflow run . -e main --env-manager=local
 
       # Ambil run_id terbaru
       - name: Get Latest Run ID
@@ -64,8 +67,7 @@ jobs:
             -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
 
       - name: Push Docker Image
-        run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
 
       - name: Completed
         run: echo "🎯 Pipeline complete!"

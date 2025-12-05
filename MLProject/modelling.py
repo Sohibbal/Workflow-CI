@@ -17,16 +17,17 @@ def main():
     # ===========================
     # FIX RUN_ID ERROR
     # ===========================
+    # Tutup run aktif lama
     mlflow.end_run()
-    
+
     # ===========================
-    # SET TRACKING URI & EXPERIMENT
+    # TRACKING URI & EXPERIMENT
     # ===========================
-    mlflow.set_tracking_uri("file:./mlruns")  # local tracking
+    mlflow.set_tracking_uri("file:./mlruns")  # local mlruns
     mlflow.set_experiment("RandomForest-Experiment")
 
     # ===========================
-    # LOAD DATA
+    # LOAD DATASET
     # ===========================
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
     df = pd.read_csv(data_path)
@@ -106,6 +107,7 @@ def main():
         # ===========================
         # LOG ARTIFACTS (CONFUSION MATRIX)
         # ===========================
+        # Training CM
         cm_train = confusion_matrix(y_train, preds_train)
         plt.figure(figsize=(8,6))
         plt.imshow(cm_train, interpolation='nearest', cmap=plt.cm.Blues)
@@ -129,7 +131,7 @@ def main():
         fi.to_csv("feature_importance.csv", index=False)
         mlflow.log_artifact("feature_importance.csv")
 
-        # Confusion matrix testing
+        # Testing CM
         cm_test = confusion_matrix(y_test, preds_test)
         plt.figure(figsize=(8,6))
         plt.imshow(cm_test, interpolation='nearest', cmap=plt.cm.Blues)
