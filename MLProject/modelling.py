@@ -12,13 +12,6 @@ from sklearn.preprocessing import label_binarize
 import matplotlib.pyplot as plt
 import os
 
-# ===========================
-# Gunakan SQLite backend agar run_id stabil di CI
-# ===========================
-mlflow.set_tracking_uri("sqlite:///mlflow.db")
-mlflow.set_experiment("RandomForest-Experiment")
-
-
 def main():
     # Load dataset
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
