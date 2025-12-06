@@ -44,44 +44,76 @@ jobs:
     - name: Debug - List MLruns Directory
       run: |
         echo "=== Root mlruns ==="
-        ls -la mlruns/ 2>/dev/null || echo "No mlruns in root"
+        if [ -d "mlruns/0" ]; then
+          echo "Found mlruns in root:"
+          ls -la mlruns/0/
+        else
+          echo "No mlruns in root"
+        fi
         
+        echo ""
         echo "=== MLProject mlruns ==="
-        ls -la MLProject/mlruns/ 2>/dev/null || echo "No mlruns in MLProject"
-        
-        echo "=== Checking experiment folders ==="
-        find . -type d -name "mlruns" -exec ls -la {} \;
+        if [ -d "MLProject/mlruns/0" ]; then
+          echo "Found mlruns in MLProject:"
+          ls -la MLProject/mlruns/0/
+        else
+          echo "No mlruns in MLProject"
+        fi
 
     # ===========================
-    # GET RUN_ID
+    # GET RUN_ID USING PYTHON
     # ===========================
     - name: Get Latest run_id
       id: get_run_id
       run: |
-        # Try to find mlruns directory (could be in root or MLProject)
-        if [ -d "mlruns/0" ]; then
-          MLRUNS_PATH="mlruns"
-        elif [ -d "MLProject/mlruns/0" ]; then
-          MLRUNS_PATH="MLProject/mlruns"
-        else
-          echo "❌ No mlruns found!"
-          exit 1
-        fi
+        python << 'PYTHON_SCRIPT'
+        import mlflow
+        import os
+        import sys
         
-        echo "📂 Using mlruns path: $MLRUNS_PATH"
+        # Try to find mlruns directory
+        mlruns_paths = ["mlruns", "MLProject/mlruns"]
+        mlruns_path = None
         
-        # Get the latest run ID
-        RUN_ID=$(ls -td $MLRUNS_PATH/0/*/ 2>/dev/null | head -1 | xargs basename || echo "")
+        for path in mlruns_paths:
+            if os.path.exists(os.path.join(path, "0")):
+                mlruns_path = path
+                break
         
-        if [ -z "$RUN_ID" ]; then
-          echo "❌ No run found!"
-          exit 1
-        fi
+        if mlruns_path is None:
+            print("❌ No mlruns found!")
+            sys.exit(1)
         
-        echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "mlruns_path=$MLRUNS_PATH" >> $GITHUB_ENV
-        echo "✅ Run ID: $RUN_ID"
-        echo "✅ MLruns Path: $MLRUNS_PATH"
+        print(f"📂 Using mlruns path: {mlruns_path}")
+        
+        # Set tracking URI
+        mlflow.set_tracking_uri(f"file:./{mlruns_path}")
+        
+        try:
+            # Get latest run
+            runs = mlflow.search_runs(
+                experiment_ids=["0"], 
+                order_by=["start_time desc"], 
+                max_results=1
+            )
+            
+            if len(runs) > 0:
+                run_id = runs.iloc[0]['run_id']
+                print(f"✅ Run ID: {run_id}")
+                print(f"✅ MLruns Path: {mlruns_path}")
+                
+                # Write to GitHub environment
+                with open(os.environ['GITHUB_ENV'], 'a') as f:
+                    f.write(f"run_id={run_id}\n")
+                    f.write(f"mlruns_path={mlruns_path}\n")
+            else:
+                print("❌ No runs found!")
+                sys.exit(1)
+                
+        except Exception as e:
+            print(f"❌ Error getting run: {e}")
+            sys.exit(1)
+        PYTHON_SCRIPT
 
     # ===========================
     # VERIFY MODEL EXISTS
@@ -93,13 +125,23 @@ jobs:
         
         if [ ! -d "$MODEL_PATH" ]; then
           echo "❌ Model not found at $MODEL_PATH"
-          echo "Available artifacts:"
-          ls -la ${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/ || echo "No artifacts directory"
+          echo ""
+          echo "📋 Available artifacts:"
+          ARTIFACTS_PATH="${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts"
+          if [ -d "$ARTIFACTS_PATH" ]; then
+            ls -la "$ARTIFACTS_PATH"
+          else
+            echo "No artifacts directory at $ARTIFACTS_PATH"
+          fi
+          
+          echo ""
+          echo "📋 Run directory contents:"
+          ls -la "${{ env.mlruns_path }}/0/${{ env.run_id }}/"
           exit 1
         fi
         
         echo "✅ Model found!"
-        ls -la $MODEL_PATH
+        ls -la "$MODEL_PATH"
 
     # ===========================
     # COPY MODEL TO ROOT FOR DOCKER BUILD
