@@ -7,22 +7,17 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import os
 
 # =======================================================================
-#                           MLflow CONFIG FIX
+# MLflow CONFIG WAJIB untuk project
 # =======================================================================
-mlflow.set_tracking_uri("file:./mlruns")  # Simpan tracking di MLProject/mlruns
-mlflow.set_experiment("Obesity Classification")  # Eksperimen khusus
-
-# Pastikan tidak ada active run sebelumnya (KRITIKAL FIX)
-if mlflow.active_run():
-    mlflow.end_run()
+mlflow.set_tracking_uri("file:./mlruns")
+mlflow.set_experiment("Obesity Classification")
+mlflow.autolog()  # otomatis logging model & metrics
 # =======================================================================
 
 def main():
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
-
     df = pd.read_csv(data_path)
 
-    # Pisahkan fitur & label
     X = df.drop(df.columns[-1], axis=1)
     y = df[df.columns[-1]]
 
@@ -30,8 +25,8 @@ def main():
         X, y, test_size=0.2, random_state=42
     )
 
-    with mlflow.start_run(run_name="RandomForest-Autolog-Manuallog"):
-        mlflow.autolog()  # Otomatis log metrics & model
+    # NESTED RUN (FIX UTAMA)
+    with mlflow.start_run(run_name="RandomForest-Autolog-Manuallog", nested=True):
 
         model = RandomForestClassifier()
         model.fit(X_train, y_train)
@@ -43,16 +38,15 @@ def main():
         rec = recall_score(y_test, preds, average="weighted")
         f1 = f1_score(y_test, preds, average="weighted")
 
-        # Manual logging tambahan
+        # Logging manual tambahan
         mlflow.log_metric("accuracy_manual", acc)
         mlflow.log_metric("precision_manual", prec)
         mlflow.log_metric("recall_manual", rec)
         mlflow.log_metric("f1_manual", f1)
 
-        # Simpan model
-        mlflow.sklearn.log_model(model, artifact_path="model")
+        mlflow.sklearn.log_model(model, "model")
 
-    print("🎯 MLflow Run selesai, model & metrics berhasil disimpan!")
+    print("🎯 Sukses! Training & logging MLflow selesai!")
 
 if __name__ == "__main__":
     main()
