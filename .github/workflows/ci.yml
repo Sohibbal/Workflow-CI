@@ -22,303 +22,39 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install mlflow[extras]
-        pip install scikit-learn pandas numpy matplotlib
-
-    # Clear any cached MLflow data
-    - name: Clean MLflow Environment
-      run: |
-        rm -rf mlruns
-        rm -rf MLProject/mlruns
+        pip install scikit-learn pandas numpy
 
     # ===========================
     # TRAINING MLflow PROJECT
     # ===========================
     - name: Run MLflow Project (Training)
-      working-directory: MLProject
       run: |
-        echo "🚀 Starting MLflow Project..."
-        mlflow run . --env-manager=local 2>&1 | tee mlflow_run.log
-        
-        echo ""
-        echo "📋 Checking for errors in log..."
-        if grep -i "error\|exception\|failed" mlflow_run.log; then
-          echo "⚠️  Potential errors detected in MLflow run"
-        else
-          echo "✅ No errors detected"
-        fi
+        mlflow run MLProject --env-manager=local
 
     # ===========================
-    # COMPREHENSIVE DEBUG
+    # GET RUN_ID
     # ===========================
-    - name: Debug - Full Directory Structure
-      run: |
-        echo "=========================================="
-        echo "🔍 ROOT DIRECTORY STRUCTURE"
-        echo "=========================================="
-        ls -la
-        
-        echo ""
-        echo "=========================================="
-        echo "🔍 FIND ALL mlruns DIRECTORIES"
-        echo "=========================================="
-        find . -type d -name "mlruns" 2>/dev/null || echo "No mlruns found"
-        
-        echo ""
-        echo "=========================================="
-        echo "🔍 ROOT mlruns/ (if exists)"
-        echo "=========================================="
-        if [ -d "mlruns" ]; then
-          echo "Found mlruns in root!"
-          ls -la mlruns/
-          
-          if [ -d "mlruns/0" ]; then
-            echo ""
-            echo "Experiment 0 contents:"
-            ls -la mlruns/0/
-            
-            echo ""
-            echo "Looking for run directories (UUID format):"
-            find mlruns/0 -maxdepth 1 -type d | grep -E "[a-f0-9]{32}" || echo "No run directories found"
-          fi
-        else
-          echo "No mlruns in root"
-        fi
-        
-        echo ""
-        echo "=========================================="
-        echo "🔍 MLProject/mlruns/ (if exists)"
-        echo "=========================================="
-        if [ -d "MLProject/mlruns" ]; then
-          echo "Found mlruns in MLProject!"
-          ls -la MLProject/mlruns/
-          
-          if [ -d "MLProject/mlruns/0" ]; then
-            echo ""
-            echo "Experiment 0 contents:"
-            ls -la MLProject/mlruns/0/
-            
-            echo ""
-            echo "Looking for run directories (UUID format):"
-            find MLProject/mlruns/0 -maxdepth 1 -type d | grep -E "[a-f0-9]{32}" || echo "No run directories found"
-            
-            echo ""
-            echo "All subdirectories in experiment 0:"
-            find MLProject/mlruns/0 -maxdepth 1 -type d
-          fi
-        else
-          echo "No mlruns in MLProject"
-        fi
-        
-        echo ""
-        echo "=========================================="
-        echo "🔍 CHECK FOR meta.yaml FILES"
-        echo "=========================================="
-        find . -name "meta.yaml" -type f 2>/dev/null | head -20
-
-    # ===========================
-    # GET RUN_ID USING PYTHON
-    # ===========================
-    - name: Get Latest run_id (Parent Run from MLflow Project)
+    - name: Get Latest run_id
       id: get_run_id
       run: |
-        python << 'PYTHON_SCRIPT'
-        import mlflow
-        import os
-        import sys
-        import time
-        
-        # Wait a bit for filesystem to sync (just in case)
-        time.sleep(2)
-        
-        # Try to find mlruns directory
-        mlruns_paths = ["MLProject/mlruns", "mlruns"]
-        mlruns_path = None
-        
-        for path in mlruns_paths:
-            full_path = os.path.join(path, "0")
-            print(f"🔍 Checking: {full_path}")
-            if os.path.exists(full_path):
-                mlruns_path = path
-                print(f"✅ Found experiment at: {full_path}")
-                # List contents
-                try:
-                    contents = os.listdir(full_path)
-                    print(f"   Contents: {contents[:5]}...")  # Show first 5 items
-                except Exception as e:
-                    print(f"   Error listing: {e}")
-                break
-            else:
-                print(f"❌ Not found: {full_path}")
-        
-        if mlruns_path is None:
-            print("\n❌ No mlruns/0 directory found!")
-            print("Directory structure:")
-            for root, dirs, files in os.walk(".", topdown=True):
-                level = root.replace(".", "", 1).count(os.sep)
-                indent = " " * 2 * level
-                print(f"{indent}{os.path.basename(root)}/")
-                if level < 3:  # Only show 3 levels deep
-                    sub_indent = " " * 2 * (level + 1)
-                    for file in files[:3]:  # Show first 3 files
-                        print(f"{sub_indent}{file}")
-            sys.exit(1)
-        
-        print(f"\n📂 Using mlruns path: {mlruns_path}")
-        
-        # Set tracking URI with absolute path
-        abs_mlruns_path = os.path.abspath(mlruns_path)
-        tracking_uri = f"file://{abs_mlruns_path}"
-        mlflow.set_tracking_uri(tracking_uri)
-        print(f"🔗 Tracking URI: {tracking_uri}")
-        
-        try:
-            # Get experiment
-            experiment = mlflow.get_experiment_by_name("Default")
-            if experiment:
-                print(f"📊 Experiment ID: {experiment.experiment_id}")
-                print(f"📍 Artifact Location: {experiment.artifact_location}")
-            
-            # Get latest run - this will be the PARENT run created by mlflow project
-            print("\n🔍 Searching for runs...")
-            runs = mlflow.search_runs(
-                experiment_ids=["0"], 
-                order_by=["start_time DESC"],
-                max_results=5
-            )
-            
-            if len(runs) == 0:
-                print("❌ No runs found in experiment!")
-                
-                # Additional debugging - check files directly
-                exp_path = os.path.join(mlruns_path, "0")
-                if os.path.exists(exp_path):
-                    print(f"\n🔍 Checking {exp_path} directly:")
-                    items = os.listdir(exp_path)
-                    print(f"   Found {len(items)} items")
-                    
-                    # Look for run directories (32-char hex)
-                    import re
-                    run_dirs = [d for d in items if os.path.isdir(os.path.join(exp_path, d)) 
-                               and re.match(r'^[a-f0-9]{32}$', d)]
-                    
-                    if run_dirs:
-                        print(f"   Found {len(run_dirs)} potential run directories:")
-                        for rd in run_dirs[:3]:
-                            print(f"     - {rd}")
-                            meta_file = os.path.join(exp_path, rd, "meta.yaml")
-                            if os.path.exists(meta_file):
-                                print(f"       ✅ Has meta.yaml")
-                            else:
-                                print(f"       ❌ Missing meta.yaml")
-                    else:
-                        print("   No run directories found")
-                
-                sys.exit(1)
-            
-            print(f"✅ Found {len(runs)} recent runs:")
-            for idx, row in runs.iterrows():
-                run_id = row['run_id']
-                run_name = row.get('tags.mlflow.runName', 'N/A')
-                parent_id = row.get('tags.mlflow.parentRunId', None)
-                status = row.get('status', 'N/A')
-                print(f"  {idx+1}. {run_id}")
-                print(f"     Name: {run_name}")
-                print(f"     Parent: {parent_id}")
-                print(f"     Status: {status}")
-            
-            # The parent run (created by mlflow project) will be the first one
-            parent_run = runs.iloc[0]
-            run_id = parent_run['run_id']
-            
-            print(f"\n✅ Selected Run ID: {run_id}")
-            print(f"✅ MLruns Path: {mlruns_path}")
-            
-            # Verify artifacts exist
-            artifacts_path = os.path.join(mlruns_path, "0", run_id, "artifacts")
-            if os.path.exists(artifacts_path):
-                print(f"✅ Artifacts directory exists")
-                artifacts = os.listdir(artifacts_path)
-                print(f"   Contents: {artifacts}")
-            else:
-                print(f"⚠️  Artifacts directory not found at: {artifacts_path}")
-            
-            # Write to GitHub environment
-            with open(os.environ['GITHUB_ENV'], 'a') as f:
-                f.write(f"run_id={run_id}\n")
-                f.write(f"mlruns_path={mlruns_path}\n")
-            
-            print("\n✅ Environment variables set successfully!")
-                
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
-            sys.exit(1)
-        PYTHON_SCRIPT
+        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
+        echo "run_id=$RUN_ID" >> $GITHUB_ENV
+        echo "Run ID: $RUN_ID"
 
-    # ===========================
-    # SHOW ARTIFACTS INFO
-    # ===========================
-    - name: Show Artifacts Info
+    # GET MODEL_ID
+    - name: Get Model ID
+      id: get_model_id
       run: |
-        echo "=========================================="
-        echo "📦 Artifacts in Run"
-        echo "=========================================="
-        ARTIFACTS_PATH="${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts"
-        
-        if [ -d "$ARTIFACTS_PATH" ]; then
-          echo "✅ Artifacts directory found!"
-          ls -lah "$ARTIFACTS_PATH"
-          
-          echo ""
-          echo "📊 Checking for model directory..."
-          if [ -d "$ARTIFACTS_PATH/model" ]; then
-            echo "✅ Model found!"
-            ls -lah "$ARTIFACTS_PATH/model"
-          else
-            echo "⚠️  Model directory not found - will fail at Docker build step"
-          fi
-        else
-          echo "❌ No artifacts directory found!"
-          exit 1
-        fi
+        MODEL_ID=$(ls mlruns/0/models | head -1)
+        echo "model_id=$MODEL_ID" >> $GITHUB_ENV
+        echo "Model ID: $MODEL_ID"
 
-    # ===========================
-    # UPLOAD ALL ARTIFACTS TO GITHUB
-    # ===========================
-    - name: Upload Training Artifacts (Confusion Matrix, Datasets, Feature Importance)
-      uses: actions/upload-artifact@v4
-      with:
-        name: training-artifacts
-        path: |
-          ${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/*.png
-          ${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/*.csv
-        if-no-files-found: warn
-
-    # ===========================
-    # COPY MODEL TO ROOT FOR DOCKER BUILD
-    # ===========================
-    - name: Copy Model Artifacts for Docker Build
-      run: |
-        MODEL_PATH="${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/model"
-        
-        if [ ! -d "$MODEL_PATH" ]; then
-          echo "❌ Model not found at $MODEL_PATH"
-          echo "Cannot proceed with Docker build!"
-          exit 1
-        fi
-        
-        mkdir -p model_artifacts
-        cp -r "$MODEL_PATH"/* model_artifacts/
-        echo "✅ Model copied to model_artifacts/"
-        ls -la model_artifacts/
-
-    # UPLOAD MODEL ARTIFACT
+    # UPLOAD ARTIFACT MODEL
     - name: Upload Model Artifact
       uses: actions/upload-artifact@v4
       with:
         name: trained-ml-model
-        path: model_artifacts/
+        path: mlruns/0/models/${{ env.model_id }}/artifacts
 
     # ===========================
     # DOCKER SETUP
@@ -338,13 +74,13 @@ jobs:
     - name: Build Docker Image from MLflow Model
       run: |
         mlflow models build-docker \
-          -m "model_artifacts" \
-          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest" \
-          --enable-mlserver
+          -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
+          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:${{ env.run_id }}"
 
     - name: Push Docker Image
       run: |
-        docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
+        docker push \
+          ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:${{ env.run_id }}
 
     - name: Completed
-      run: echo "🎯 Pipeline complete! Docker image pushed successfully!"
+      run: echo "🎯 Pipeline complete!"

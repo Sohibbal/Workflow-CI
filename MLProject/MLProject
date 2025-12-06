@@ -1,6 +1,4 @@
-name: RandomForestManualLog
-
-env_manager: local
+name: obesity-classification
 
 entry_points:
   main:
