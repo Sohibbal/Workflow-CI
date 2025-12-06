@@ -30,7 +30,7 @@ def main():
     )
 
     # NESTED RUN (FIX UTAMA)
-    with mlflow.start_run(run_name="RandomForest-Autolog-Manuallog", nested=True):
+    with mlflow.start_run(run_name="RandomForest-Autolog-Manuallog"):
 
         model = RandomForestClassifier()
         model.fit(X_train, y_train)
