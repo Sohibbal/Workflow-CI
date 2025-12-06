@@ -84,14 +84,6 @@ jobs:
         path: |
           MLProject/mlruns/0/${{ env.run_id }}/artifacts/confusion_matrix_training.png
           MLProject/mlruns/0/${{ env.run_id }}/artifacts/confusion_matrix_testing.png
-    
-    # Upload Metrics
-    - name: Upload Metrics
-      uses: actions/upload-artifact@v4
-      with:
-        name: metrics
-        path: MLProject/mlruns/0/${{ env.run_id }}/metrics
-
 
     # Docker Setup
     - name: Setup Docker Buildx
