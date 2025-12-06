@@ -115,21 +115,153 @@ jobs:
         echo "=========================================="
         find . -name "meta.yaml" -type f 2>/dev/null | head -20
 
-
-    # GET MODEL_ID
-    - name: Get Model ID
-      id: get_model_id
+    # ===========================
+    # GET RUN_ID USING PYTHON
+    # ===========================
+    - name: Get Latest run_id
+      id: get_run_id
       run: |
-        MODEL_ID=$(ls mlruns/0/models | head -1)
-        echo "model_id=$MODEL_ID" >> $GITHUB_ENV
-        echo "Model ID: $MODEL_ID"
+        python << 'PYTHON_SCRIPT'
+        import mlflow
+        import os
+        import sys
+        import glob
+        from pathlib import Path
+        
+        # Try to find mlruns directory
+        mlruns_paths = ["mlruns", "MLProject/mlruns"]
+        mlruns_path = None
+        
+        for path in mlruns_paths:
+            if os.path.exists(os.path.join(path, "0")):
+                mlruns_path = path
+                break
+        
+        if mlruns_path is None:
+            print("❌ No mlruns found!")
+            sys.exit(1)
+        
+        print(f"📂 Using mlruns path: {mlruns_path}")
+        
+        # Method 1: Try MLflow API
+        try:
+            mlflow.set_tracking_uri(f"file:./{mlruns_path}")
+            runs = mlflow.search_runs(
+                experiment_ids=["0"], 
+                order_by=["start_time desc"], 
+                max_results=1
+            )
+            
+            if len(runs) > 0:
+                run_id = runs.iloc[0]['run_id']
+                print(f"✅ Run ID (from MLflow API): {run_id}")
+                
+                # Write to GitHub environment
+                with open(os.environ['GITHUB_ENV'], 'a') as f:
+                    f.write(f"run_id={run_id}\n")
+                    f.write(f"mlruns_path={mlruns_path}\n")
+                sys.exit(0)
+        except Exception as e:
+            print(f"⚠️  MLflow API failed: {e}")
+            print("Trying filesystem fallback...")
+        
+        # Method 2: Fallback - Find run directory from filesystem
+        try:
+            experiment_path = os.path.join(mlruns_path, "0")
+            print(f"🔍 Searching in: {experiment_path}")
+            
+            # Find all directories that look like UUIDs (32 hex chars)
+            run_dirs = []
+            for item in os.listdir(experiment_path):
+                item_path = os.path.join(experiment_path, item)
+                if os.path.isdir(item_path) and len(item) == 32:
+                    # Check if it's a valid hex string
+                    try:
+                        int(item, 16)
+                        run_dirs.append((item, os.path.getmtime(item_path)))
+                    except ValueError:
+                        continue
+            
+            if not run_dirs:
+                print("❌ No run directories found!")
+                print(f"Contents of {experiment_path}:")
+                print(os.listdir(experiment_path))
+                sys.exit(1)
+            
+            # Sort by modification time (newest first)
+            run_dirs.sort(key=lambda x: x[1], reverse=True)
+            run_id = run_dirs[0][0]
+            
+            print(f"✅ Run ID (from filesystem): {run_id}")
+            print(f"✅ MLruns Path: {mlruns_path}")
+            
+            # Write to GitHub environment
+            with open(os.environ['GITHUB_ENV'], 'a') as f:
+                f.write(f"run_id={run_id}\n")
+                f.write(f"mlruns_path={mlruns_path}\n")
+                
+        except Exception as e:
+            print(f"❌ Filesystem fallback failed: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+        PYTHON_SCRIPT
+
+    # ===========================
+    # VERIFY MODEL EXISTS
+    # ===========================
+    - name: Verify Model Artifacts
+      run: |
+        MODEL_PATH="${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/model"
+        echo "🔍 Checking model at: $MODEL_PATH"
+        
+        if [ ! -d "$MODEL_PATH" ]; then
+          echo "❌ Model not found at $MODEL_PATH"
+          echo ""
+          echo "📋 Available artifacts:"
+          ARTIFACTS_PATH="${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts"
+          if [ -d "$ARTIFACTS_PATH" ]; then
+            ls -la "$ARTIFACTS_PATH"
+          else
+            echo "No artifacts directory at $ARTIFACTS_PATH"
+          fi
+          
+          echo ""
+          echo "📋 Run directory contents:"
+          ls -la "${{ env.mlruns_path }}/0/${{ env.run_id }}/"
+          
+          echo ""
+          echo "🔍 Checking MLflow run log for errors..."
+          if [ -f "MLProject/mlflow_run.log" ]; then
+            echo "Last 50 lines of MLflow run:"
+            tail -50 MLProject/mlflow_run.log
+          fi
+          
+          echo ""
+          echo "❌ FAILED: Model was not logged by MLflow!"
+          echo "This indicates an error during model logging in modelling.py"
+          exit 1
+        fi
+        
+        echo "✅ Model found!"
+        ls -la "$MODEL_PATH"
+
+    # ===========================
+    # COPY MODEL TO ROOT FOR DOCKER BUILD
+    # ===========================
+    - name: Copy Model Artifacts
+      run: |
+        mkdir -p model_artifacts
+        cp -r ${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/model/* model_artifacts/
+        echo "✅ Model copied to model_artifacts/"
+        ls -la model_artifacts/
 
     # UPLOAD ARTIFACT MODEL
     - name: Upload Model Artifact
       uses: actions/upload-artifact@v4
       with:
         name: trained-ml-model
-        path: mlruns/0/models/${{ env.model_id }}/artifacts
+        path: model_artifacts/
 
     # ===========================
     # DOCKER SETUP
@@ -149,12 +281,13 @@ jobs:
     - name: Build Docker Image from MLflow Model
       run: |
         mlflow models build-docker \
-          -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
-          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
+          -m "model_artifacts" \
+          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest" \
+          --enable-mlserver
 
     - name: Push Docker Image
       run: |
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
 
     - name: Completed
-      run: echo "🎯 Pipeline complete!
+      run: echo "🎯 Pipeline complete! Docker image pushed successfully!"
