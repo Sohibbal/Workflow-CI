@@ -61,9 +61,30 @@ jobs:
         
         echo ""
         echo "=========================================="
-        echo "🔍 FIND ALL mlruns & mlartifacts DIRECTORIES"
+        echo "🔍 FIND ALL mlruns DIRECTORIES"
         echo "=========================================="
-        find . -type d -name "mlruns" -o -name "mlartifacts" 2>/dev/null || echo "No mlruns/mlartifacts found"
+        find . -type d -name "mlruns" 2>/dev/null || echo "No mlruns found"
+        
+        echo ""
+        echo "=========================================="
+        echo "🔍 ROOT mlruns/ (if exists)"
+        echo "=========================================="
+        if [ -d "mlruns" ]; then
+          echo "Found mlruns in root!"
+          ls -la mlruns/
+          
+          if [ -d "mlruns/0" ]; then
+            echo ""
+            echo "Experiment 0 contents:"
+            ls -la mlruns/0/
+            
+            echo ""
+            echo "Looking for run directories (UUID format):"
+            find mlruns/0 -maxdepth 1 -type d | grep -E "[a-f0-9]{32}" || echo "No run directories found"
+          fi
+        else
+          echo "No mlruns in root"
+        fi
         
         echo ""
         echo "=========================================="
@@ -77,30 +98,17 @@ jobs:
             echo ""
             echo "Experiment 0 contents:"
             ls -la MLProject/mlruns/0/
+            
+            echo ""
+            echo "Looking for run directories (UUID format):"
+            find MLProject/mlruns/0 -maxdepth 1 -type d | grep -E "[a-f0-9]{32}" || echo "No run directories found"
+            
+            echo ""
+            echo "All subdirectories in experiment 0:"
+            find MLProject/mlruns/0 -maxdepth 1 -type d
           fi
         else
           echo "No mlruns in MLProject"
-        fi
-        
-        echo ""
-        echo "=========================================="
-        echo "🔍 MLProject/mlartifacts/ (if exists)"
-        echo "=========================================="
-        if [ -d "MLProject/mlartifacts" ]; then
-          echo "Found mlartifacts in MLProject!"
-          ls -la MLProject/mlartifacts/
-          
-          if [ -d "MLProject/mlartifacts/0" ]; then
-            echo ""
-            echo "Experiment 0 artifacts:"
-            ls -la MLProject/mlartifacts/0/
-            
-            echo ""
-            echo "Run directories:"
-            find MLProject/mlartifacts/0 -maxdepth 1 -type d
-          fi
-        else
-          echo "No mlartifacts in MLProject"
         fi
         
         echo ""
