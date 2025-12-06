@@ -15,13 +15,13 @@ from sklearn.preprocessing import label_binarize
 
 def main():
     # ===========================
-    # FIX RUN_ID ERROR
+    # Gunakan MLflow tracking lokal
     # ===========================
-    # Tutup run aktif lama
-    mlflow.end_run()
+    mlflow.set_tracking_uri("file:./mlruns")  # mlruns folder lokal
+    mlflow.set_experiment("RandomForest-Experiment")
 
     # ===========================
-    # LOAD DATASET
+    # Load dataset
     # ===========================
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
     df = pd.read_csv(data_path)
@@ -32,12 +32,11 @@ def main():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     # ===========================
-    # START NEW RUN
+    # Start MLflow run baru
     # ===========================
     with mlflow.start_run(run_name="RandomForest-Manuallog", nested=False):
-
         # ===========================
-        # LOG DATASET
+        # Log dataset
         # ===========================
         train_df = pd.concat([X_train, y_train], axis=1)
         test_df = pd.concat([X_test, y_test], axis=1)
@@ -51,13 +50,9 @@ def main():
         mlflow.log_artifact(test_path)
 
         # ===========================
-        # HYPERPARAMETER TUNING
+        # Hyperparameter tuning
         # ===========================
-        params = {
-            "n_estimators": [50, 100, 150],
-            "max_depth": [3, 5, 10, None]
-        }
-
+        params = {"n_estimators": [50, 100, 150], "max_depth": [3, 5, 10, None]}
         model = RandomForestClassifier()
         grid = GridSearchCV(model, params, cv=3, scoring='accuracy')
         grid.fit(X_train, y_train)
@@ -65,7 +60,7 @@ def main():
         best_model = grid.best_estimator_
 
         # ===========================
-        # PREDICTION
+        # Prediction
         # ===========================
         preds_train = best_model.predict(X_train)
         probs_train = best_model.predict_proba(X_train)
@@ -77,7 +72,7 @@ def main():
         y_test_bin = label_binarize(y_test, classes=classes)
 
         # ===========================
-        # LOG METRICS
+        # Log metrics
         # ===========================
         mlflow.log_metric("training_accuracy_score", accuracy_score(y_train, preds_train))
         mlflow.log_metric("training_f1_score", f1_score(y_train, preds_train, average='weighted'))
@@ -92,16 +87,15 @@ def main():
         mlflow.log_metric("testing_recall", recall_score(y_test, preds_test, average='weighted'))
 
         # ===========================
-        # LOG PARAMETERS
+        # Log parameters
         # ===========================
-        all_params = best_model.get_params()
-        for key, value in all_params.items():
+        for key, value in best_model.get_params().items():
             mlflow.log_param(key, value)
 
         # ===========================
-        # LOG ARTIFACTS (CONFUSION MATRIX)
+        # Log artifacts
         # ===========================
-        # Training CM
+        # Training confusion matrix
         cm_train = confusion_matrix(y_train, preds_train)
         plt.figure(figsize=(8,6))
         plt.imshow(cm_train, interpolation='nearest', cmap=plt.cm.Blues)
@@ -118,14 +112,11 @@ def main():
         mlflow.log_artifact("confusion_matrix_training.png")
 
         # Feature importance
-        fi = pd.DataFrame({
-            "feature": X.columns,
-            "importance": best_model.feature_importances_
-        }).sort_values(by="importance", ascending=False)
+        fi = pd.DataFrame({"feature": X.columns, "importance": best_model.feature_importances_}).sort_values(by="importance", ascending=False)
         fi.to_csv("feature_importance.csv", index=False)
         mlflow.log_artifact("feature_importance.csv")
 
-        # Testing CM
+        # Testing confusion matrix
         cm_test = confusion_matrix(y_test, preds_test)
         plt.figure(figsize=(8,6))
         plt.imshow(cm_test, interpolation='nearest', cmap=plt.cm.Blues)
@@ -141,12 +132,10 @@ def main():
         plt.close()
         mlflow.log_artifact("confusion_matrix_testing.png")
 
-        # ===========================
-        # LOG MODEL
-        # ===========================
+        # Log model
         mlflow.sklearn.log_model(best_model, "model")
 
-    print("✅ Training Selesai dan model tersimpan di mlruns!")
+    print("✅ Training selesai dan model tersimpan di mlruns!")
 
 if __name__ == "__main__":
     main()

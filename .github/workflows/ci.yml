@@ -25,7 +25,7 @@ jobs:
 
       # Clean old mlruns
       - name: Clean old mlruns
-        run: rm -rf mlruns || true
+        run: rm -rf MLProject/mlruns || true
 
       # Run MLflow Project
       - name: Run MLflow Project
@@ -34,24 +34,24 @@ jobs:
       # Debug folder mlruns
       - name: Debug MLflow Folder
         run: |
-          echo "Folder mlruns/0 structure:"
-          ls -R mlruns/0
+          echo "Folder MLProject/mlruns/0 structure:"
+          ls -R MLProject/mlruns/0 || echo "Folder kosong"
 
-      # Ambil run_id terbaru setelah run
+      # Ambil run_id terbaru
       - name: Get Latest Run ID
         id: get_run_id
         run: |
-          RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
+          RUN_ID=$(ls -td MLProject/mlruns/0/*/ | head -1 | xargs basename)
           echo "run_id=$RUN_ID" >> $GITHUB_ENV
           echo "Using run_id: $RUN_ID"
-          ls -R mlruns/0/$RUN_ID
+          ls -R MLProject/mlruns/0/$RUN_ID
 
       # Upload model artifact
       - name: Upload Model Artifact
         uses: actions/upload-artifact@v4
         with:
           name: trained-ml-model
-          path: mlruns/0/${{ env.run_id }}/artifacts/model
+          path: MLProject/mlruns/0/${{ env.run_id }}/artifacts/model
 
       # Docker setup
       - name: Setup Docker Buildx
@@ -66,7 +66,7 @@ jobs:
       # Build Docker image dari MLflow model
       - name: Build Docker Image
         run: |
-          MODEL_PATH="mlruns/0/${{ env.run_id }}/artifacts/model"
+          MODEL_PATH="MLProject/mlruns/0/${{ env.run_id }}/artifacts/model"
           echo "Using model path: $MODEL_PATH"
           mlflow models build-docker -m "$MODEL_PATH" -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
 
