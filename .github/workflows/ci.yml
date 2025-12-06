@@ -29,7 +29,7 @@ jobs:
 
       # Run MLflow Project
       - name: Run MLflow Project
-        run: mlflow run . -e main --env-manager=local
+        run: mlflow run MLProject -e main --env-manager=local
 
       # Debug folder mlruns
       - name: Debug MLflow Folder
