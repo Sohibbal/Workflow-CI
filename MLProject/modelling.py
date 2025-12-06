@@ -22,6 +22,11 @@ def main():
     print("🚀 Starting Model Training")
     print("=" * 60)
     
+    # SET TRACKING URI EXPLICITLY
+    # MLflow Project runs from MLProject directory, so mlruns will be there
+    mlflow.set_tracking_uri("file:./mlruns")
+    print(f"📍 MLflow Tracking URI: {mlflow.get_tracking_uri()}")
+    
     # Load dataset
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
     print(f"📂 Loading dataset from: {data_path}")
@@ -53,6 +58,10 @@ def main():
         # Don't create new run, work with active run directly
         perform_training(X_train, X_test, y_train, y_test, X)
         
+        # IMPORTANT: Flush the run to ensure it's written to disk
+        print("\n💾 Flushing MLflow run to disk...")
+        mlflow.flush_async_logging()
+        
     else:
         # Running standalone - create new run
         print(f"🆕 Creating new MLflow run\n")
@@ -61,6 +70,10 @@ def main():
             print(f"📍 Artifact URI: {run.info.artifact_uri}\n")
             
             perform_training(X_train, X_test, y_train, y_test, X)
+            
+            # IMPORTANT: Flush the run to ensure it's written to disk
+            print("\n💾 Flushing MLflow run to disk...")
+            mlflow.flush_async_logging()
 
 
 def perform_training(X_train, X_test, y_train, y_test, X):

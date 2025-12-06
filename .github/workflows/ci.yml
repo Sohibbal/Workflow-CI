@@ -125,56 +125,129 @@ jobs:
         import mlflow
         import os
         import sys
+        import time
+        
+        # Wait a bit for filesystem to sync (just in case)
+        time.sleep(2)
         
         # Try to find mlruns directory
-        mlruns_paths = ["mlruns", "MLProject/mlruns"]
+        mlruns_paths = ["MLProject/mlruns", "mlruns"]
         mlruns_path = None
         
         for path in mlruns_paths:
-            if os.path.exists(os.path.join(path, "0")):
+            full_path = os.path.join(path, "0")
+            print(f"🔍 Checking: {full_path}")
+            if os.path.exists(full_path):
                 mlruns_path = path
+                print(f"✅ Found experiment at: {full_path}")
+                # List contents
+                try:
+                    contents = os.listdir(full_path)
+                    print(f"   Contents: {contents[:5]}...")  # Show first 5 items
+                except Exception as e:
+                    print(f"   Error listing: {e}")
                 break
+            else:
+                print(f"❌ Not found: {full_path}")
         
         if mlruns_path is None:
-            print("❌ No mlruns found!")
+            print("\n❌ No mlruns/0 directory found!")
+            print("Directory structure:")
+            for root, dirs, files in os.walk(".", topdown=True):
+                level = root.replace(".", "", 1).count(os.sep)
+                indent = " " * 2 * level
+                print(f"{indent}{os.path.basename(root)}/")
+                if level < 3:  # Only show 3 levels deep
+                    sub_indent = " " * 2 * (level + 1)
+                    for file in files[:3]:  # Show first 3 files
+                        print(f"{sub_indent}{file}")
             sys.exit(1)
         
-        print(f"📂 Using mlruns path: {mlruns_path}")
+        print(f"\n📂 Using mlruns path: {mlruns_path}")
         
-        # Set tracking URI
-        mlflow.set_tracking_uri(f"file:./{mlruns_path}")
+        # Set tracking URI with absolute path
+        abs_mlruns_path = os.path.abspath(mlruns_path)
+        tracking_uri = f"file://{abs_mlruns_path}"
+        mlflow.set_tracking_uri(tracking_uri)
+        print(f"🔗 Tracking URI: {tracking_uri}")
         
         try:
+            # Get experiment
+            experiment = mlflow.get_experiment_by_name("Default")
+            if experiment:
+                print(f"📊 Experiment ID: {experiment.experiment_id}")
+                print(f"📍 Artifact Location: {experiment.artifact_location}")
+            
             # Get latest run - this will be the PARENT run created by mlflow project
+            print("\n🔍 Searching for runs...")
             runs = mlflow.search_runs(
                 experiment_ids=["0"], 
-                order_by=["start_time desc"], 
-                max_results=5  # Get top 5 to inspect
+                order_by=["start_time DESC"],
+                max_results=5
             )
             
             if len(runs) == 0:
-                print("❌ No runs found!")
+                print("❌ No runs found in experiment!")
+                
+                # Additional debugging - check files directly
+                exp_path = os.path.join(mlruns_path, "0")
+                if os.path.exists(exp_path):
+                    print(f"\n🔍 Checking {exp_path} directly:")
+                    items = os.listdir(exp_path)
+                    print(f"   Found {len(items)} items")
+                    
+                    # Look for run directories (32-char hex)
+                    import re
+                    run_dirs = [d for d in items if os.path.isdir(os.path.join(exp_path, d)) 
+                               and re.match(r'^[a-f0-9]{32}$', d)]
+                    
+                    if run_dirs:
+                        print(f"   Found {len(run_dirs)} potential run directories:")
+                        for rd in run_dirs[:3]:
+                            print(f"     - {rd}")
+                            meta_file = os.path.join(exp_path, rd, "meta.yaml")
+                            if os.path.exists(meta_file):
+                                print(f"       ✅ Has meta.yaml")
+                            else:
+                                print(f"       ❌ Missing meta.yaml")
+                    else:
+                        print("   No run directories found")
+                
                 sys.exit(1)
             
-            print(f"\n📋 Found {len(runs)} recent runs:")
+            print(f"✅ Found {len(runs)} recent runs:")
             for idx, row in runs.iterrows():
                 run_id = row['run_id']
                 run_name = row.get('tags.mlflow.runName', 'N/A')
                 parent_id = row.get('tags.mlflow.parentRunId', None)
-                print(f"  - {run_id}: {run_name} (parent: {parent_id})")
+                status = row.get('status', 'N/A')
+                print(f"  {idx+1}. {run_id}")
+                print(f"     Name: {run_name}")
+                print(f"     Parent: {parent_id}")
+                print(f"     Status: {status}")
             
-            # The parent run (created by mlflow project) will NOT have a parentRunId
-            # OR it will be the most recent run
+            # The parent run (created by mlflow project) will be the first one
             parent_run = runs.iloc[0]
             run_id = parent_run['run_id']
             
-            print(f"\n✅ Using Run ID: {run_id}")
+            print(f"\n✅ Selected Run ID: {run_id}")
             print(f"✅ MLruns Path: {mlruns_path}")
+            
+            # Verify artifacts exist
+            artifacts_path = os.path.join(mlruns_path, "0", run_id, "artifacts")
+            if os.path.exists(artifacts_path):
+                print(f"✅ Artifacts directory exists")
+                artifacts = os.listdir(artifacts_path)
+                print(f"   Contents: {artifacts}")
+            else:
+                print(f"⚠️  Artifacts directory not found at: {artifacts_path}")
             
             # Write to GitHub environment
             with open(os.environ['GITHUB_ENV'], 'a') as f:
                 f.write(f"run_id={run_id}\n")
                 f.write(f"mlruns_path={mlruns_path}\n")
+            
+            print("\n✅ Environment variables set successfully!")
                 
         except Exception as e:
             print(f"❌ Error: {e}")
