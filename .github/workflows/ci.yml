@@ -36,7 +36,16 @@ jobs:
     - name: Run MLflow Project (Training)
       working-directory: MLProject
       run: |
-        mlflow run . --env-manager=local
+        echo "🚀 Starting MLflow Project..."
+        mlflow run . --env-manager=local 2>&1 | tee mlflow_run.log
+        
+        echo ""
+        echo "📋 Checking for errors in log..."
+        if grep -i "error\|exception\|failed" mlflow_run.log; then
+          echo "⚠️  Potential errors detected in MLflow run"
+        else
+          echo "✅ No errors detected"
+        fi
 
     # ===========================
     # COMPREHENSIVE DEBUG
@@ -220,6 +229,17 @@ jobs:
           echo ""
           echo "📋 Run directory contents:"
           ls -la "${{ env.mlruns_path }}/0/${{ env.run_id }}/"
+          
+          echo ""
+          echo "🔍 Checking MLflow run log for errors..."
+          if [ -f "MLProject/mlflow_run.log" ]; then
+            echo "Last 50 lines of MLflow run:"
+            tail -50 MLProject/mlflow_run.log
+          fi
+          
+          echo ""
+          echo "❌ FAILED: Model was not logged by MLflow!"
+          echo "This indicates an error during model logging in modelling.py"
           exit 1
         fi
         
