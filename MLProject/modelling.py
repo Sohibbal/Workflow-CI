@@ -21,12 +21,6 @@ def main():
     mlflow.end_run()
 
     # ===========================
-    # TRACKING URI & EXPERIMENT
-    # ===========================
-    mlflow.set_tracking_uri("file:./mlruns")  # local mlruns
-    mlflow.set_experiment("RandomForest-Experiment")
-
-    # ===========================
     # LOAD DATASET
     # ===========================
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
