@@ -29,8 +29,6 @@ jobs:
       run: |
         rm -rf mlruns
         rm -rf MLProject/mlruns
-        rm -rf mlartifacts
-        rm -rf MLProject/mlartifacts
 
     # ===========================
     # TRAINING MLflow PROJECT
@@ -120,7 +118,7 @@ jobs:
     # ===========================
     # GET RUN_ID USING PYTHON
     # ===========================
-    - name: Get Latest run_id and Locate Artifacts
+    - name: Get Latest run_id (Parent Run from MLflow Project)
       id: get_run_id
       run: |
         python << 'PYTHON_SCRIPT'
@@ -129,53 +127,58 @@ jobs:
         import sys
         import time
         
-        # Wait a bit for filesystem to sync
+        # Wait a bit for filesystem to sync (just in case)
         time.sleep(2)
         
-        print("=" * 60)
-        print("🔍 SEARCHING FOR MLFLOW RUN DATA")
-        print("=" * 60)
-        
-        # Check possible locations for mlruns (metadata) and mlartifacts
-        base_paths = ["MLProject", "."]
+        # Try to find mlruns directory
+        mlruns_paths = ["MLProject/mlruns", "mlruns"]
         mlruns_path = None
-        mlartifacts_path = None
         
-        # Find mlruns (metadata)
-        for base in base_paths:
-            path = os.path.join(base, "mlruns")
-            if os.path.exists(path):
+        for path in mlruns_paths:
+            full_path = os.path.join(path, "0")
+            print(f"🔍 Checking: {full_path}")
+            if os.path.exists(full_path):
                 mlruns_path = path
-                print(f"✅ Found mlruns at: {mlruns_path}")
+                print(f"✅ Found experiment at: {full_path}")
+                # List contents
+                try:
+                    contents = os.listdir(full_path)
+                    print(f"   Contents: {contents[:5]}...")  # Show first 5 items
+                except Exception as e:
+                    print(f"   Error listing: {e}")
                 break
-        
-        # Find mlartifacts (artifacts storage)
-        for base in base_paths:
-            path = os.path.join(base, "mlartifacts")
-            if os.path.exists(path):
-                mlartifacts_path = path
-                print(f"✅ Found mlartifacts at: {mlartifacts_path}")
-                break
+            else:
+                print(f"❌ Not found: {full_path}")
         
         if mlruns_path is None:
-            print("❌ No mlruns directory found!")
+            print("\n❌ No mlruns/0 directory found!")
+            print("Directory structure:")
+            for root, dirs, files in os.walk(".", topdown=True):
+                level = root.replace(".", "", 1).count(os.sep)
+                indent = " " * 2 * level
+                print(f"{indent}{os.path.basename(root)}/")
+                if level < 3:  # Only show 3 levels deep
+                    sub_indent = " " * 2 * (level + 1)
+                    for file in files[:3]:  # Show first 3 files
+                        print(f"{sub_indent}{file}")
             sys.exit(1)
         
-        # Set tracking URI
+        print(f"\n📂 Using mlruns path: {mlruns_path}")
+        
+        # Set tracking URI with absolute path
         abs_mlruns_path = os.path.abspath(mlruns_path)
         tracking_uri = f"file://{abs_mlruns_path}"
         mlflow.set_tracking_uri(tracking_uri)
         print(f"🔗 Tracking URI: {tracking_uri}")
         
         try:
-            # Get experiment info
+            # Get experiment
             experiment = mlflow.get_experiment_by_name("Default")
             if experiment:
-                print(f"\n📊 Experiment Info:")
-                print(f"   ID: {experiment.experiment_id}")
-                print(f"   Artifact Location: {experiment.artifact_location}")
+                print(f"📊 Experiment ID: {experiment.experiment_id}")
+                print(f"📍 Artifact Location: {experiment.artifact_location}")
             
-            # Search for runs
+            # Get latest run - this will be the PARENT run created by mlflow project
             print("\n🔍 Searching for runs...")
             runs = mlflow.search_runs(
                 experiment_ids=["0"], 
@@ -184,85 +187,67 @@ jobs:
             )
             
             if len(runs) == 0:
-                print("❌ No runs found!")
+                print("❌ No runs found in experiment!")
+                
+                # Additional debugging - check files directly
+                exp_path = os.path.join(mlruns_path, "0")
+                if os.path.exists(exp_path):
+                    print(f"\n🔍 Checking {exp_path} directly:")
+                    items = os.listdir(exp_path)
+                    print(f"   Found {len(items)} items")
+                    
+                    # Look for run directories (32-char hex)
+                    import re
+                    run_dirs = [d for d in items if os.path.isdir(os.path.join(exp_path, d)) 
+                               and re.match(r'^[a-f0-9]{32}$', d)]
+                    
+                    if run_dirs:
+                        print(f"   Found {len(run_dirs)} potential run directories:")
+                        for rd in run_dirs[:3]:
+                            print(f"     - {rd}")
+                            meta_file = os.path.join(exp_path, rd, "meta.yaml")
+                            if os.path.exists(meta_file):
+                                print(f"       ✅ Has meta.yaml")
+                            else:
+                                print(f"       ❌ Missing meta.yaml")
+                    else:
+                        print("   No run directories found")
+                
                 sys.exit(1)
             
-            print(f"✅ Found {len(runs)} runs:\n")
+            print(f"✅ Found {len(runs)} recent runs:")
             for idx, row in runs.iterrows():
                 run_id = row['run_id']
                 run_name = row.get('tags.mlflow.runName', 'N/A')
+                parent_id = row.get('tags.mlflow.parentRunId', None)
                 status = row.get('status', 'N/A')
-                print(f"  {idx+1}. Run ID: {run_id}")
+                print(f"  {idx+1}. {run_id}")
                 print(f"     Name: {run_name}")
-                print(f"     Status: {status}\n")
+                print(f"     Parent: {parent_id}")
+                print(f"     Status: {status}")
             
-            # Get the latest run
-            latest_run = runs.iloc[0]
-            run_id = latest_run['run_id']
+            # The parent run (created by mlflow project) will be the first one
+            parent_run = runs.iloc[0]
+            run_id = parent_run['run_id']
             
-            print(f"✅ Selected Run ID: {run_id}")
+            print(f"\n✅ Selected Run ID: {run_id}")
+            print(f"✅ MLruns Path: {mlruns_path}")
             
-            # Now find where the artifacts actually are
-            # Check both possible locations
-            artifact_locations = []
-            
-            # Location 1: mlruns/{exp_id}/{run_id}/artifacts
-            loc1 = os.path.join(mlruns_path, "0", run_id, "artifacts")
-            if os.path.exists(loc1):
-                artifact_locations.append(("mlruns", loc1))
-            
-            # Location 2: mlartifacts/{exp_id}/{run_id}/artifacts
-            if mlartifacts_path:
-                loc2 = os.path.join(mlartifacts_path, "0", run_id, "artifacts")
-                if os.path.exists(loc2):
-                    artifact_locations.append(("mlartifacts", loc2))
-            
-            if not artifact_locations:
-                print("\n❌ No artifacts found in either location!")
-                print(f"   Checked: {loc1}")
-                if mlartifacts_path:
-                    print(f"   Checked: {loc2}")
-                sys.exit(1)
-            
-            # Use the first location found (should be mlartifacts if it exists)
-            storage_type, artifacts_path = artifact_locations[0]
-            
-            print(f"\n✅ Artifacts found in: {storage_type}")
-            print(f"   Path: {artifacts_path}")
-            
-            # List artifacts
+            # Verify artifacts exist
+            artifacts_path = os.path.join(mlruns_path, "0", run_id, "artifacts")
             if os.path.exists(artifacts_path):
+                print(f"✅ Artifacts directory exists")
                 artifacts = os.listdir(artifacts_path)
                 print(f"   Contents: {artifacts}")
-                
-                # Check for model
-                model_path = os.path.join(artifacts_path, "model")
-                if os.path.exists(model_path):
-                    print(f"   ✅ Model directory exists!")
-                    model_files = os.listdir(model_path)
-                    print(f"   Model files: {model_files[:5]}...")
-                else:
-                    print(f"   ❌ Model directory NOT found!")
-            
-            # Determine the base path for artifacts
-            if storage_type == "mlartifacts":
-                base_artifacts_path = mlartifacts_path
             else:
-                base_artifacts_path = mlruns_path
+                print(f"⚠️  Artifacts directory not found at: {artifacts_path}")
             
             # Write to GitHub environment
             with open(os.environ['GITHUB_ENV'], 'a') as f:
                 f.write(f"run_id={run_id}\n")
                 f.write(f"mlruns_path={mlruns_path}\n")
-                f.write(f"artifacts_base_path={base_artifacts_path}\n")
-                f.write(f"storage_type={storage_type}\n")
             
-            print(f"\n{'=' * 60}")
-            print("✅ Environment variables set:")
-            print(f"   run_id={run_id}")
-            print(f"   artifacts_base_path={base_artifacts_path}")
-            print(f"   storage_type={storage_type}")
-            print(f"{'=' * 60}")
+            print("\n✅ Environment variables set successfully!")
                 
         except Exception as e:
             print(f"❌ Error: {e}")
@@ -279,11 +264,7 @@ jobs:
         echo "=========================================="
         echo "📦 Artifacts in Run"
         echo "=========================================="
-        echo "Storage Type: ${{ env.storage_type }}"
-        echo "Artifacts Base Path: ${{ env.artifacts_base_path }}"
-        echo "Run ID: ${{ env.run_id }}"
-        
-        ARTIFACTS_PATH="${{ env.artifacts_base_path }}/0/${{ env.run_id }}/artifacts"
+        ARTIFACTS_PATH="${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts"
         
         if [ -d "$ARTIFACTS_PATH" ]; then
           echo "✅ Artifacts directory found!"
@@ -296,10 +277,9 @@ jobs:
             ls -lah "$ARTIFACTS_PATH/model"
           else
             echo "⚠️  Model directory not found - will fail at Docker build step"
-            exit 1
           fi
         else
-          echo "❌ No artifacts directory found at: $ARTIFACTS_PATH"
+          echo "❌ No artifacts directory found!"
           exit 1
         fi
 
@@ -311,8 +291,8 @@ jobs:
       with:
         name: training-artifacts
         path: |
-          ${{ env.artifacts_base_path }}/0/${{ env.run_id }}/artifacts/*.png
-          ${{ env.artifacts_base_path }}/0/${{ env.run_id }}/artifacts/*.csv
+          ${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/*.png
+          ${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/*.csv
         if-no-files-found: warn
 
     # ===========================
@@ -320,7 +300,7 @@ jobs:
     # ===========================
     - name: Copy Model Artifacts for Docker Build
       run: |
-        MODEL_PATH="${{ env.artifacts_base_path }}/0/${{ env.run_id }}/artifacts/model"
+        MODEL_PATH="${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/model"
         
         if [ ! -d "$MODEL_PATH" ]; then
           echo "❌ Model not found at $MODEL_PATH"
