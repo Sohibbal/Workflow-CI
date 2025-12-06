@@ -39,26 +39,72 @@ jobs:
         mlflow run . --env-manager=local
 
     # ===========================
-    # FIND AND LIST MLRUNS
+    # COMPREHENSIVE DEBUG
     # ===========================
-    - name: Debug - List MLruns Directory
+    - name: Debug - Full Directory Structure
       run: |
-        echo "=== Root mlruns ==="
-        if [ -d "mlruns/0" ]; then
-          echo "Found mlruns in root:"
-          ls -la mlruns/0/
+        echo "=========================================="
+        echo "🔍 ROOT DIRECTORY STRUCTURE"
+        echo "=========================================="
+        ls -la
+        
+        echo ""
+        echo "=========================================="
+        echo "🔍 FIND ALL mlruns DIRECTORIES"
+        echo "=========================================="
+        find . -type d -name "mlruns" 2>/dev/null || echo "No mlruns found"
+        
+        echo ""
+        echo "=========================================="
+        echo "🔍 ROOT mlruns/ (if exists)"
+        echo "=========================================="
+        if [ -d "mlruns" ]; then
+          echo "Found mlruns in root!"
+          ls -la mlruns/
+          
+          if [ -d "mlruns/0" ]; then
+            echo ""
+            echo "Experiment 0 contents:"
+            ls -la mlruns/0/
+            
+            echo ""
+            echo "Looking for run directories (UUID format):"
+            find mlruns/0 -maxdepth 1 -type d | grep -E "[a-f0-9]{32}" || echo "No run directories found"
+          fi
         else
           echo "No mlruns in root"
         fi
         
         echo ""
-        echo "=== MLProject mlruns ==="
-        if [ -d "MLProject/mlruns/0" ]; then
-          echo "Found mlruns in MLProject:"
-          ls -la MLProject/mlruns/0/
+        echo "=========================================="
+        echo "🔍 MLProject/mlruns/ (if exists)"
+        echo "=========================================="
+        if [ -d "MLProject/mlruns" ]; then
+          echo "Found mlruns in MLProject!"
+          ls -la MLProject/mlruns/
+          
+          if [ -d "MLProject/mlruns/0" ]; then
+            echo ""
+            echo "Experiment 0 contents:"
+            ls -la MLProject/mlruns/0/
+            
+            echo ""
+            echo "Looking for run directories (UUID format):"
+            find MLProject/mlruns/0 -maxdepth 1 -type d | grep -E "[a-f0-9]{32}" || echo "No run directories found"
+            
+            echo ""
+            echo "All subdirectories in experiment 0:"
+            find MLProject/mlruns/0 -maxdepth 1 -type d
+          fi
         else
           echo "No mlruns in MLProject"
         fi
+        
+        echo ""
+        echo "=========================================="
+        echo "🔍 CHECK FOR meta.yaml FILES"
+        echo "=========================================="
+        find . -name "meta.yaml" -type f 2>/dev/null | head -20
 
     # ===========================
     # GET RUN_ID USING PYTHON
@@ -70,6 +116,8 @@ jobs:
         import mlflow
         import os
         import sys
+        import glob
+        from pathlib import Path
         
         # Try to find mlruns directory
         mlruns_paths = ["mlruns", "MLProject/mlruns"]
@@ -86,11 +134,9 @@ jobs:
         
         print(f"📂 Using mlruns path: {mlruns_path}")
         
-        # Set tracking URI
-        mlflow.set_tracking_uri(f"file:./{mlruns_path}")
-        
+        # Method 1: Try MLflow API
         try:
-            # Get latest run
+            mlflow.set_tracking_uri(f"file:./{mlruns_path}")
             runs = mlflow.search_runs(
                 experiment_ids=["0"], 
                 order_by=["start_time desc"], 
@@ -99,19 +145,56 @@ jobs:
             
             if len(runs) > 0:
                 run_id = runs.iloc[0]['run_id']
-                print(f"✅ Run ID: {run_id}")
-                print(f"✅ MLruns Path: {mlruns_path}")
+                print(f"✅ Run ID (from MLflow API): {run_id}")
                 
                 # Write to GitHub environment
                 with open(os.environ['GITHUB_ENV'], 'a') as f:
                     f.write(f"run_id={run_id}\n")
                     f.write(f"mlruns_path={mlruns_path}\n")
-            else:
-                print("❌ No runs found!")
+                sys.exit(0)
+        except Exception as e:
+            print(f"⚠️  MLflow API failed: {e}")
+            print("Trying filesystem fallback...")
+        
+        # Method 2: Fallback - Find run directory from filesystem
+        try:
+            experiment_path = os.path.join(mlruns_path, "0")
+            print(f"🔍 Searching in: {experiment_path}")
+            
+            # Find all directories that look like UUIDs (32 hex chars)
+            run_dirs = []
+            for item in os.listdir(experiment_path):
+                item_path = os.path.join(experiment_path, item)
+                if os.path.isdir(item_path) and len(item) == 32:
+                    # Check if it's a valid hex string
+                    try:
+                        int(item, 16)
+                        run_dirs.append((item, os.path.getmtime(item_path)))
+                    except ValueError:
+                        continue
+            
+            if not run_dirs:
+                print("❌ No run directories found!")
+                print(f"Contents of {experiment_path}:")
+                print(os.listdir(experiment_path))
                 sys.exit(1)
+            
+            # Sort by modification time (newest first)
+            run_dirs.sort(key=lambda x: x[1], reverse=True)
+            run_id = run_dirs[0][0]
+            
+            print(f"✅ Run ID (from filesystem): {run_id}")
+            print(f"✅ MLruns Path: {mlruns_path}")
+            
+            # Write to GitHub environment
+            with open(os.environ['GITHUB_ENV'], 'a') as f:
+                f.write(f"run_id={run_id}\n")
+                f.write(f"mlruns_path={mlruns_path}\n")
                 
         except Exception as e:
-            print(f"❌ Error getting run: {e}")
+            print(f"❌ Filesystem fallback failed: {e}")
+            import traceback
+            traceback.print_exc()
             sys.exit(1)
         PYTHON_SCRIPT
 
