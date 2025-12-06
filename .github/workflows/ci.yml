@@ -23,6 +23,9 @@ jobs:
         pip install --upgrade pip
         pip install mlflow[extras]
         pip install scikit-learn pandas numpy matplotlib
+    
+    - name: Clean old mlflow runs
+      run: rm -rf MLProject/mlruns
 
     # ===========================
     # TRAINING MLflow PROJECT

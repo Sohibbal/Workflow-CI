@@ -15,6 +15,10 @@ mlflow.autolog()  # otomatis logging model & metrics
 # =======================================================================
 
 def main():
+    # Clear any existing run_id to prevent resume attempts
+    if 'MLFLOW_RUN_ID' in os.environ:
+        del os.environ['MLFLOW_RUN_ID']
+    
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
     df = pd.read_csv(data_path)
 
