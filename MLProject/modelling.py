@@ -17,8 +17,8 @@ def main():
     if 'MLFLOW_RUN_ID' in os.environ:
         del os.environ['MLFLOW_RUN_ID']
     
-    # Set tracking URI to local directory
-    mlflow.set_tracking_uri("file:./mlruns")
+    # DON'T set tracking URI when running via mlflow project
+    # Let MLflow handle it automatically
     
     # Load dataset
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
@@ -33,7 +33,7 @@ def main():
 
     # Start a fresh run (no run_id specified)
     with mlflow.start_run(run_name="RandomForest-Manuallog") as run:
-        print(f"🔥 MLflow Run ID: {run.info.run_id}")
+        print(f"MLflow Run ID: {run.info.run_id}")
 
         # Log Dataset Train & Test
         train_df = pd.concat([X_train, y_train], axis=1)
@@ -47,6 +47,10 @@ def main():
 
         mlflow.log_artifact(train_path)
         mlflow.log_artifact(test_path)
+
+        # Clean up local files
+        os.remove(train_path)
+        os.remove(test_path)
 
         # Hyperparameter tuning menggunakan GridSearchCV
         params = {
@@ -106,6 +110,7 @@ def main():
         plt.savefig(cm_train_path)
         plt.close()
         mlflow.log_artifact(cm_train_path)
+        os.remove(cm_train_path)
 
         # Feature Importance
         fi = pd.DataFrame({
@@ -115,6 +120,7 @@ def main():
         fi_path = "feature_importance.csv"
         fi.to_csv(fi_path, index=False)
         mlflow.log_artifact(fi_path)
+        os.remove(fi_path)
 
         # Artefak: Confusion Matrix Testing
         cm_test = confusion_matrix(y_test, preds_test)
@@ -133,12 +139,13 @@ def main():
         plt.savefig(cm_test_path)
         plt.close()
         mlflow.log_artifact(cm_test_path)
+        os.remove(cm_test_path)
 
         # Log model
         mlflow.sklearn.log_model(best_model, "model")
 
-        print(f"✅ Model, metrics, dan artifact berhasil disimpan di MLflow!")
-        print(f"📊 Run ID: {run.info.run_id}")
+        print(f"Model, metrics, dan artifact berhasil disimpan di MLflow!")
+        print(f"Run ID: {run.info.run_id}")
 
 
 if __name__ == "__main__":

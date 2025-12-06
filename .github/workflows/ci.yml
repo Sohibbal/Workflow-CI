@@ -28,8 +28,7 @@ jobs:
     - name: Clean MLflow Environment
       run: |
         rm -rf mlruns
-        unset MLFLOW_RUN_ID
-        unset MLFLOW_EXPERIMENT_ID
+        rm -rf MLProject/mlruns
 
     # ===========================
     # TRAINING MLflow PROJECT
@@ -40,43 +39,67 @@ jobs:
         mlflow run . --env-manager=local
 
     # ===========================
+    # FIND AND LIST MLRUNS
+    # ===========================
+    - name: Debug - List MLruns Directory
+      run: |
+        echo "=== Root mlruns ==="
+        ls -la mlruns/ 2>/dev/null || echo "No mlruns in root"
+        
+        echo "=== MLProject mlruns ==="
+        ls -la MLProject/mlruns/ 2>/dev/null || echo "No mlruns in MLProject"
+        
+        echo "=== Checking experiment folders ==="
+        find . -type d -name "mlruns" -exec ls -la {} \;
+
+    # ===========================
     # GET RUN_ID
     # ===========================
     - name: Get Latest run_id
       id: get_run_id
-      working-directory: MLProject
       run: |
-        RUN_ID=$(ls -td mlruns/0/*/ 2>/dev/null | head -1 | xargs basename || echo "")
+        # Try to find mlruns directory (could be in root or MLProject)
+        if [ -d "mlruns/0" ]; then
+          MLRUNS_PATH="mlruns"
+        elif [ -d "MLProject/mlruns/0" ]; then
+          MLRUNS_PATH="MLProject/mlruns"
+        else
+          echo "❌ No mlruns found!"
+          exit 1
+        fi
+        
+        echo "📂 Using mlruns path: $MLRUNS_PATH"
+        
+        # Get the latest run ID
+        RUN_ID=$(ls -td $MLRUNS_PATH/0/*/ 2>/dev/null | head -1 | xargs basename || echo "")
+        
         if [ -z "$RUN_ID" ]; then
           echo "❌ No run found!"
           exit 1
         fi
+        
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
+        echo "mlruns_path=$MLRUNS_PATH" >> $GITHUB_ENV
         echo "✅ Run ID: $RUN_ID"
+        echo "✅ MLruns Path: $MLRUNS_PATH"
 
     # ===========================
-    # REGISTER MODEL
+    # VERIFY MODEL EXISTS
     # ===========================
-    - name: Register Model in MLflow
-      working-directory: MLProject
+    - name: Verify Model Artifacts
       run: |
-        python << EOF
-        import mlflow
-        mlflow.set_tracking_uri("file:./mlruns")
+        MODEL_PATH="${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/model"
+        echo "🔍 Checking model at: $MODEL_PATH"
         
-        # Get the run and register model
-        run_id = "${{ env.run_id }}"
-        model_uri = f"runs:/{run_id}/model"
+        if [ ! -d "$MODEL_PATH" ]; then
+          echo "❌ Model not found at $MODEL_PATH"
+          echo "Available artifacts:"
+          ls -la ${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/ || echo "No artifacts directory"
+          exit 1
+        fi
         
-        # Register model
-        result = mlflow.register_model(model_uri, "obesity-classifier")
-        print(f"✅ Model registered with version: {result.version}")
-        
-        # Save model name and version to env
-        with open("$GITHUB_ENV", "a") as f:
-            f.write(f"MODEL_NAME=obesity-classifier\n")
-            f.write(f"MODEL_VERSION={result.version}\n")
-        EOF
+        echo "✅ Model found!"
+        ls -la $MODEL_PATH
 
     # ===========================
     # COPY MODEL TO ROOT FOR DOCKER BUILD
@@ -84,7 +107,8 @@ jobs:
     - name: Copy Model Artifacts
       run: |
         mkdir -p model_artifacts
-        cp -r MLProject/mlruns/0/${{ env.run_id }}/artifacts/model/* model_artifacts/
+        cp -r ${{ env.mlruns_path }}/0/${{ env.run_id }}/artifacts/model/* model_artifacts/
+        echo "✅ Model copied to model_artifacts/"
         ls -la model_artifacts/
 
     # UPLOAD ARTIFACT MODEL
@@ -121,4 +145,4 @@ jobs:
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
 
     - name: Completed
-      run: echo "🎯 Pipeline complete! Model version ${{ env.MODEL_VERSION }} deployed!"
+      run: echo "🎯 Pipeline complete! Docker image pushed successfully!"
