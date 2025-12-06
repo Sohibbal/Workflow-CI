@@ -22,39 +22,77 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install mlflow[extras]
-        pip install scikit-learn pandas numpy
+        pip install scikit-learn pandas numpy matplotlib
+
+    # Clear any cached MLflow data
+    - name: Clean MLflow Environment
+      run: |
+        rm -rf mlruns
+        unset MLFLOW_RUN_ID
+        unset MLFLOW_EXPERIMENT_ID
 
     # ===========================
     # TRAINING MLflow PROJECT
     # ===========================
     - name: Run MLflow Project (Training)
+      working-directory: MLProject
       run: |
-        mlflow run MLProject --env-manager=local
+        mlflow run . --env-manager=local
 
     # ===========================
     # GET RUN_ID
     # ===========================
     - name: Get Latest run_id
       id: get_run_id
+      working-directory: MLProject
       run: |
-        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
+        RUN_ID=$(ls -td mlruns/0/*/ 2>/dev/null | head -1 | xargs basename || echo "")
+        if [ -z "$RUN_ID" ]; then
+          echo "❌ No run found!"
+          exit 1
+        fi
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
-        echo "Run ID: $RUN_ID"
+        echo "✅ Run ID: $RUN_ID"
 
-    # GET MODEL_ID
-    - name: Get Model ID
-      id: get_model_id
+    # ===========================
+    # REGISTER MODEL
+    # ===========================
+    - name: Register Model in MLflow
+      working-directory: MLProject
       run: |
-        MODEL_ID=$(ls mlruns/0/models | head -1)
-        echo "model_id=$MODEL_ID" >> $GITHUB_ENV
-        echo "Model ID: $MODEL_ID"
+        python << EOF
+        import mlflow
+        mlflow.set_tracking_uri("file:./mlruns")
+        
+        # Get the run and register model
+        run_id = "${{ env.run_id }}"
+        model_uri = f"runs:/{run_id}/model"
+        
+        # Register model
+        result = mlflow.register_model(model_uri, "obesity-classifier")
+        print(f"✅ Model registered with version: {result.version}")
+        
+        # Save model name and version to env
+        with open("$GITHUB_ENV", "a") as f:
+            f.write(f"MODEL_NAME=obesity-classifier\n")
+            f.write(f"MODEL_VERSION={result.version}\n")
+        EOF
+
+    # ===========================
+    # COPY MODEL TO ROOT FOR DOCKER BUILD
+    # ===========================
+    - name: Copy Model Artifacts
+      run: |
+        mkdir -p model_artifacts
+        cp -r MLProject/mlruns/0/${{ env.run_id }}/artifacts/model/* model_artifacts/
+        ls -la model_artifacts/
 
     # UPLOAD ARTIFACT MODEL
     - name: Upload Model Artifact
       uses: actions/upload-artifact@v4
       with:
         name: trained-ml-model
-        path: mlruns/0/models/${{ env.model_id }}/artifacts
+        path: model_artifacts/
 
     # ===========================
     # DOCKER SETUP
@@ -74,12 +112,13 @@ jobs:
     - name: Build Docker Image from MLflow Model
       run: |
         mlflow models build-docker \
-          -m "mlruns/0/models/${{ env.model_id }}/artifacts" \
-          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
+          -m "model_artifacts" \
+          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest" \
+          --enable-mlserver
 
     - name: Push Docker Image
       run: |
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
 
     - name: Completed
-      run: echo "🎯 Pipeline complete!"
+      run: echo "🎯 Pipeline complete! Model version ${{ env.MODEL_VERSION }} deployed!"

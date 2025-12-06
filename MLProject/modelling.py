@@ -13,6 +13,13 @@ import matplotlib.pyplot as plt
 import os
 
 def main():
+    # Clear any existing run_id to prevent resume attempts
+    if 'MLFLOW_RUN_ID' in os.environ:
+        del os.environ['MLFLOW_RUN_ID']
+    
+    # Set tracking URI to local directory
+    mlflow.set_tracking_uri("file:./mlruns")
+    
     # Load dataset
     data_path = os.path.join(os.path.dirname(__file__), "obesity_classification_preprocessing.csv")
     df = pd.read_csv(data_path)
@@ -24,7 +31,9 @@ def main():
         X, y, test_size=0.2, random_state=42
     )
 
-    with mlflow.start_run(run_name="RandomForest-Manuallog"):
+    # Start a fresh run (no run_id specified)
+    with mlflow.start_run(run_name="RandomForest-Manuallog") as run:
+        print(f"🔥 MLflow Run ID: {run.info.run_id}")
 
         # Log Dataset Train & Test
         train_df = pd.concat([X_train, y_train], axis=1)
@@ -45,7 +54,7 @@ def main():
             "max_depth": [3, 5, 10, None]
         }
 
-        model = RandomForestClassifier()
+        model = RandomForestClassifier(random_state=42)
         grid = GridSearchCV(model, params, cv=3, scoring='accuracy')
         grid.fit(X_train, y_train)
 
@@ -128,7 +137,8 @@ def main():
         # Log model
         mlflow.sklearn.log_model(best_model, "model")
 
-    print("✅ Model, metrics, dan artifact berhasil disimpan di MLflow!")
+        print(f"✅ Model, metrics, dan artifact berhasil disimpan di MLflow!")
+        print(f"📊 Run ID: {run.info.run_id}")
 
 
 if __name__ == "__main__":
