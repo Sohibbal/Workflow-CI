@@ -41,7 +41,7 @@ jobs:
     - name: Get Run ID
       working-directory: MLProject
       run: |
-        RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
+        RUN_ID=$(ls -td mlruns/0/*/ | grep -Eo '[0-9a-f]{32}' | head -1)
         echo "run_id=$RUN_ID" >> $GITHUB_ENV
         echo "Run ID: $RUN_ID"
 
