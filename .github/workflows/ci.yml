@@ -56,11 +56,16 @@ jobs:
         echo "Model ID: $MODEL_ID"
 
     # UPLOAD ARTIFACT MODEL
-    - name: Upload Model Artifact
+    - name: Upload All ML Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: trained-ml-model
-        path: MLProject/mlruns/0/models/${{ env.model_id }}/artifacts
+        name: ml-artifacts
+        path: |
+          MLProject/mlruns/0/models/${{ env.model_id }}/artifacts
+          MLProject/mlruns/0/${{ env.run_id }}/artifacts/dataset_train.csv
+          MLProject/mlruns/0/${{ env.run_id }}/artifacts/dataset_test.csv
+          MLProject/mlruns/0/${{ env.run_id }}/artifacts/feature_importance.csv
+          MLProject/mlruns/0/${{ env.run_id }}/artifacts/confusion_matrix.png
 
     # DOCKER SETUP
     - name: Setup Docker Buildx
@@ -77,12 +82,11 @@ jobs:
       run: |
         mlflow models build-docker \
           -m "MLProject/mlruns/0/models/${{ env.model_id }}/artifacts" \
-          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:${{ env.run_id }}"
+          -n "${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest"
 
     - name: Push Docker Image
       run: |
-        docker push \
-          ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:${{ env.run_id }}
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-classification:latest
 
     - name: Completed
       run: echo "🎯 Pipeline complete!"

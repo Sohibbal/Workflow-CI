@@ -30,6 +30,19 @@ def main():
     
     mlflow.set_tag("model_type", "RandomForest")
 
+    # Log Dataset Train & Test
+    train_df = pd.concat([X_train, y_train], axis=1)
+    test_df = pd.concat([X_test, y_test], axis=1)
+
+    train_path = "dataset_train.csv"
+    test_path = "dataset_test.csv"
+
+    train_df.to_csv(train_path, index=False)
+    test_df.to_csv(test_path, index=False)
+
+    mlflow.log_artifact(train_path)
+    mlflow.log_artifact(test_path)
+
     params = {
         "n_estimators": [50, 100, 150],
         "max_depth": [3, 5, 10, None]
