@@ -32,7 +32,7 @@ jobs:
 
       # Run MLflow Project
       - name: Run MLflow Project
-        run: mlflow run . -e main --env-manager=local
+        run: mlflow run MLProject -e main --env-manager=local
 
       # Ambil run_id terbaru
       - name: Get Latest Run ID
